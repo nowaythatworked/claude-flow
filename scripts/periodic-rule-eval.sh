@@ -1,9 +1,13 @@
 #!/bin/bash
-# UserPromptSubmit hook: evaluate which optional rules are relevant
-# Uses claude -p (headless) with Haiku to analyze the prompt + transcript
-# and select relevant optional rules.
+# PostToolUse hook: periodically re-evaluate optional rules
+# Debounced — only fires every N tool uses (like GSD's context monitor).
+# When it fires, uses Haiku to re-evaluate which optional rules are relevant
+# based on the current transcript state.
 
 set -euo pipefail
+
+DEBOUNCE_INTERVAL=15  # Re-evaluate every N tool uses
+CACHE_DIR="/tmp/flow-rule-cache"
 
 # --- Stdin timeout guard ---
 INPUT=""
@@ -18,15 +22,15 @@ if [ -z "$INPUT" ]; then
   exit 0
 fi
 
-# --- Parse input JSON ---
+# --- Parse input ---
 if command -v jq &>/dev/null; then
-  PROMPT=$(echo "$INPUT" | jq -r '.prompt // empty' 2>/dev/null || true)
   CWD=$(echo "$INPUT" | jq -r '.cwd // empty' 2>/dev/null || true)
   TRANSCRIPT=$(echo "$INPUT" | jq -r '.transcript_path // empty' 2>/dev/null || true)
+  SESSION_ID=$(echo "$INPUT" | jq -r '.session_id // empty' 2>/dev/null || true)
 else
-  PROMPT=$(echo "$INPUT" | sed -n 's/.*"prompt"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p' | head -1)
   CWD=$(echo "$INPUT" | sed -n 's/.*"cwd"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p' | head -1)
   TRANSCRIPT=""
+  SESSION_ID=""
 fi
 
 if [ -z "$CWD" ]; then
@@ -40,12 +44,28 @@ if [ ! -d "$OPTIONAL_DIR" ]; then
   exit 0
 fi
 
+# --- Debounce: increment counter, only evaluate at interval ---
+mkdir -p "$CACHE_DIR" 2>/dev/null || true
+COUNTER_FILE="${CACHE_DIR}/tool-counter-${SESSION_ID:-default}.txt"
+
+COUNTER=0
+if [ -f "$COUNTER_FILE" ]; then
+  COUNTER=$(cat "$COUNTER_FILE" 2>/dev/null || echo "0")
+fi
+COUNTER=$((COUNTER + 1))
+echo "$COUNTER" > "$COUNTER_FILE" 2>/dev/null || true
+
+if [ $((COUNTER % DEBOUNCE_INTERVAL)) -ne 0 ]; then
+  # Not time to evaluate yet
+  echo '{}'
+  exit 0
+fi
+
 # --- Build rule catalog ---
 RULE_CATALOG=""
 for rule_file in "$OPTIONAL_DIR"/*.md; do
   [ -f "$rule_file" ] || continue
   RULE_ID=$(basename "$rule_file")
-  # First 5 lines as summary (includes keywords if present)
   SUMMARY=$(head -5 "$rule_file" 2>/dev/null | tr '\n' ' ')
   RULE_CATALOG="${RULE_CATALOG}  - ${RULE_ID}: ${SUMMARY}\n"
 done
@@ -55,27 +75,44 @@ if [ -z "$RULE_CATALOG" ]; then
   exit 0
 fi
 
-# --- Build context for evaluation ---
+# --- Get recent transcript context ---
 RECENT_CONTEXT=""
 if [ -n "$TRANSCRIPT" ] && [ -f "$TRANSCRIPT" ]; then
-  RECENT_CONTEXT=$(tail -50 "$TRANSCRIPT" 2>/dev/null | head -c 4000 || true)
+  RECENT_CONTEXT=$(tail -80 "$TRANSCRIPT" 2>/dev/null | head -c 6000 || true)
 fi
 
-# --- Ask Haiku to evaluate ---
-EVAL_PROMPT="You are a rule selector for a coding assistant. Given the user's prompt, working directory, and recent conversation context, select which optional quality rules are relevant.
+# --- Get previously selected rules ---
+PREV_SELECTION=""
+PREV_FILE="${CACHE_DIR}/last-selection-${SESSION_ID:-default}.json"
+if [ -f "$PREV_FILE" ]; then
+  PREV_SELECTION=$(cat "$PREV_FILE" 2>/dev/null || true)
+fi
+
+# --- Ask Haiku to re-evaluate ---
+EVAL_PROMPT="You are a rule selector for a coding assistant. Based on the recent conversation activity, determine which optional quality rules should be active.
 
 Available rules:
 $(echo -e "$RULE_CATALOG")
 
-User prompt: ${PROMPT}
+Previously selected rules: ${PREV_SELECTION:-none}
 Working directory: ${CWD}
-Recent context: ${RECENT_CONTEXT:-none}
+Recent conversation activity:
+${RECENT_CONTEXT:-none}
 
-Respond with ONLY a JSON array of relevant rule filenames. Example: [\"decode-pipeline.md\", \"ui-quality.md\"]
+Respond with ONLY a JSON array of relevant rule filenames. Example: [\"decode-pipeline.md\"]
 If no rules are relevant, respond with: []"
 
-# Use claude CLI in headless mode with haiku for fast evaluation
 SELECTED=$(echo "$EVAL_PROMPT" | claude -p --model haiku --output-format json 2>/dev/null || echo "[]")
+
+# --- Check if selection changed ---
+if [ "$SELECTED" = "$PREV_SELECTION" ]; then
+  # No change, don't inject
+  echo '{}'
+  exit 0
+fi
+
+# Save new selection
+echo "$SELECTED" > "$PREV_FILE" 2>/dev/null || true
 
 # Parse selection
 if command -v jq &>/dev/null; then
@@ -89,7 +126,7 @@ if [ -z "$SELECTED_FILES" ]; then
   exit 0
 fi
 
-# --- Load selected rules ---
+# --- Load newly selected rules ---
 MATCHED_RULES=""
 while IFS= read -r rule_id; do
   [ -z "$rule_id" ] && continue
@@ -110,15 +147,8 @@ if [ -z "$MATCHED_RULES" ]; then
   exit 0
 fi
 
-# --- Write selection to cache for debounce comparison ---
-CACHE_DIR="/tmp/flow-rule-cache"
-mkdir -p "$CACHE_DIR" 2>/dev/null || true
-echo "$SELECTED" > "${CACHE_DIR}/last-selection.json" 2>/dev/null || true
-echo "0" > "${CACHE_DIR}/tool-counter.txt" 2>/dev/null || true
-
-# Add instruction header
-MATCHED_RULES="# Optional Rules (auto-selected for this task)
-These rules were loaded because they are relevant to your current task context.
+MATCHED_RULES="# Optional Rules Updated (periodic re-evaluation)
+Rules were re-evaluated based on your recent activity. The following rules are now active.
 Follow them. Adjust your approach where needed.
 If you already have a plan, re-evaluate it against these rules and adjust where needed.
 When encountering ambiguity that cannot be resolved by reading the codebase, raise it before proceeding.
