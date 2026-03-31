@@ -1,0 +1,10 @@
+{
+  "name": "flow",
+  "version": "0.1.0",
+  "description": "Lightweight workflow framework for Claude Code. Quality enforcement via rules, hooks, and structured workflows. Designed for production monorepos.",
+  "author": {
+    "name": "Jan"
+  },
+  "license": "MIT",
+  "keywords": ["workflow", "quality", "rules", "tdd", "monorepo"]
+}
