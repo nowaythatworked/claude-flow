@@ -75,7 +75,7 @@ Respond with ONLY a JSON array of relevant rule filenames. Example: [\"decode-pi
 If no rules are relevant, respond with: []"
 
 # Use claude CLI in headless mode with haiku for fast evaluation
-SELECTED=$(echo "$EVAL_PROMPT" | claude -p --model haiku --output-format json 2>/dev/null || echo "[]")
+SELECTED=$(echo "$EVAL_PROMPT" | claude -p --model sonnet --output-format json 2>/dev/null || echo "[]")
 
 # Parse selection
 if command -v jq &>/dev/null; then

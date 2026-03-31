@@ -102,7 +102,7 @@ ${RECENT_CONTEXT:-none}
 Respond with ONLY a JSON array of relevant rule filenames. Example: [\"decode-pipeline.md\"]
 If no rules are relevant, respond with: []"
 
-SELECTED=$(echo "$EVAL_PROMPT" | claude -p --model haiku --output-format json 2>/dev/null || echo "[]")
+SELECTED=$(echo "$EVAL_PROMPT" | claude -p --model sonnet --output-format json 2>/dev/null || echo "[]")
 
 # --- Check if selection changed ---
 if [ "$SELECTED" = "$PREV_SELECTION" ]; then
