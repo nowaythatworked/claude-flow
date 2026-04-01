@@ -7,12 +7,8 @@ Quality enforcement and adaptive workflow framework for Claude Code. Designed fo
 ## Quick Start
 
 ```bash
-# Test it (development mode)
-cd your-project
-claude --plugin-dir ~/path/to/claude-flow
-
-# Or install permanently
-/plugin marketplace add your-org/claude-flow
+# Install (project-scoped recommended — shared with team via .claude/settings.json)
+/plugin marketplace add nowaythatworked/claude-flow
 /plugin install flow@claude-flow --scope project
 
 # Initialize (scaffolds .flow/ with rules)
@@ -21,6 +17,8 @@ claude --plugin-dir ~/path/to/claude-flow
 # Start working
 /flow:build I want to work on <ticket/task description>
 ```
+
+For development/testing, use `claude --plugin-dir ~/path/to/claude-flow` instead.
 
 ## What Flow Does
 
@@ -47,6 +45,8 @@ Injected into every session via `SessionStart` hook and into every subagent via 
 - **Delegation** — use subagents/agentteam, keep orchestrator clean
 - **Verify work** — read before asserting, run before claiming
 
+These are starting points. Delete rules you disagree with, rewrite them to match your team's standards, or add new ones. Each project maintains its own copy in `.flow/rules/always/`.
+
 ### Optional Rules (LLM-Evaluated)
 
 Live in `.flow/rules/optional/`. Each has a `description:` frontmatter. Sonnet evaluates relevance on each substantial prompt and periodically during work (every 15 tool uses, reading the conversation transcript). Only loaded when relevant — a project with 30 optional rules still keeps context lean because only 2-3 matching the current task are loaded.
@@ -60,24 +60,6 @@ When you discover a mistake pattern:
 ```
 
 A focused rule file is created, committed to git, immediately active for the team. Over time, `.flow/rules/` becomes a living knowledge base. The more rules you maintain, the fewer corrections you make.
-
-### Where These Rules Come From
-
-Flow's shipped rules come from analyzing **222 sessions**, **1365 prompts**, and classifying **321 corrections** over 4 weeks of real production work. The 10.5% correction rate broke down into:
-
-| Mistake | Count | Prevention |
-|---------|-------|------------|
-| Premature implementation | 38 | "Discuss first" guardrail |
-| Dirty/hacky fixes | 35 | Type safety rules + hooks |
-| Ignoring existing code (DRY) | 28 | "Search before writing" rule |
-| Scope misunderstanding | 27 | Domain understanding in plans |
-| Scope creep | 22 | "Minimum viable change" rule |
-| Wrong technical approach | 20 | Confidence-gated implementation |
-| Insufficient research | 19 | Understanding phase enforcement |
-| Not following instructions | 18 | "Re-read user message" rule |
-| Not testing work | 16 | TDD rule + hooks |
-
-76% preventable through auto-injected rules and hooks.
 
 ## The `/flow:build` Workflow
 
