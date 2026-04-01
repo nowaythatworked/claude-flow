@@ -29,7 +29,7 @@ Invoked as `/flow:build <task description>`.
 **First: Orient.** Before anything else:
 - Read `.flow/TASKS.md` to understand what's already been completed
 - Check `git log --oneline -20` for recent commits
-- Read the `## Learnings` section for discoveries from previous areas that may be relevant
+- Check for any notes from previous areas that may be relevant
 - This establishes the current state regardless of how you got here (new area, rewind, resume, etc.)
 
 **Then: Judge confidence.** "Do I have everything I need to implement this confidently, respecting all loaded rules?"
@@ -38,7 +38,7 @@ Invoked as `/flow:build <task description>`.
 - If confident: create a detailed task list for THIS AREA ONLY in `.flow/TASKS.md` (nested under the high-level item)
 - The user can override this judgment: "good enough, implement" or "go deeper"
 
-**Capture learnings.** During research and implementation, note discoveries that could affect other areas — domain insights, codebase quirks, constraints, patterns. Maintain a `## Learnings` section in `.flow/TASKS.md` so this knowledge survives across rewinds and is available when deep diving into other areas.
+**Note important discoveries.** If something comes up that could affect other areas — a codebase quirk, an unexpected constraint, a domain insight — jot it down in `.flow/TASKS.md`. Don't document everything. Just the stuff you'd forget after a rewind and wish you hadn't.
 
 ## 4. Implement (per detailed task)
 
