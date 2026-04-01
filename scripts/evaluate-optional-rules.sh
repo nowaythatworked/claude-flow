@@ -40,6 +40,21 @@ if [ ! -d "$OPTIONAL_DIR" ]; then
   exit 0
 fi
 
+# --- Skip short prompts if we already have a selection ---
+CACHE_DIR="/tmp/flow-rule-cache"
+SESSION_ID=""
+if command -v jq &>/dev/null; then
+  SESSION_ID=$(echo "$INPUT" | jq -r '.session_id // empty' 2>/dev/null || true)
+fi
+PREV_FILE="${CACHE_DIR}/last-selection-${SESSION_ID:-default}.json"
+PROMPT_LEN=${#PROMPT}
+
+if [ "$PROMPT_LEN" -lt 30 ] && [ -f "$PREV_FILE" ]; then
+  # Short follow-up (yes, commit, /rewind, etc.) and we already evaluated — skip
+  echo '{}'
+  exit 0
+fi
+
 # --- Build rule catalog ---
 RULE_CATALOG=""
 for rule_file in "$OPTIONAL_DIR"/*.md; do
