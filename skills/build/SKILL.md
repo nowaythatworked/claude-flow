@@ -26,10 +26,14 @@ Invoked as `/flow:build <task description>`.
 
 ## 3. Deep Dive (per selected area)
 
-This is the adaptive core. Before creating a detailed task list, the orchestrator MUST judge:
-"Do I have everything I need to implement this confidently, respecting all loaded rules?"
+**First: Orient.** Before anything else:
+- Read `.flow/TASKS.md` to understand what's already been completed
+- Check `git log --oneline -20` for recent commits
+- This establishes the current state regardless of how you got here (new area, rewind, resume, etc.)
 
-- If NOT confident: research more, explore code in detail, ask the user questions. This is not a failure — it's thoroughness.
+**Then: Judge confidence.** "Do I have everything I need to implement this confidently, respecting all loaded rules?"
+
+- If NOT confident: research more (use subagents to explore code), ask the user questions. This is not a failure — it's thoroughness.
 - If confident: create a detailed task list for THIS AREA ONLY in `.flow/TASKS.md` (nested under the high-level item)
 - The user can override this judgment: "good enough, implement" or "go deeper"
 
@@ -41,17 +45,7 @@ This is the adaptive core. Before creating a detailed task list, the orchestrato
   - **Agentteam workers**: "When encountering ambiguity that cannot be resolved by reading the codebase, communicate it back to the orchestrator and wait for a response."
 - After each task: verify work, run tests, update `.flow/TASKS.md`
 
-## 5. After /rewind — Resuming Work
-
-After a rewind, you will NOT remember what happened after the checkpoint — the conversation is restored. But the code and files on disk reflect what was actually done. Always reconstruct state:
-
-- Read `.flow/TASKS.md` — this is your source of truth for what's been completed
-- Check `git log --oneline -20` — commits show what was implemented
-- If TASKS.md shows area 1 is done and git confirms the commits, skip it
-- Do NOT re-research or re-plan completed areas
-- The user's message tells you which area to work on next — proceed from step 3
-
-## 6. Progress & Next
+## 5. Progress & Next
 
 - After completing an area: update `.flow/TASKS.md`, mark items done
 - Present: "Here's what's done, here's what's next"
@@ -69,5 +63,4 @@ Quality rules are active via hooks (always-on rules injected at session start, o
 - NEVER implement when not confident — research more, ask questions
 - NEVER create detailed task lists for areas not being worked on yet
 - The `.flow/TASKS.md` file is the living progress tracker — always keep it updated
-- After /rewind, always check TASKS.md + git log before proceeding
 - The orchestrator's job is reasoning, planning, and verification — delegate implementation
