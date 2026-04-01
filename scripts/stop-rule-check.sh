@@ -1,7 +1,8 @@
 #!/bin/bash
-# Stop hook: remind agent to verify rule compliance before finishing
-# Only fires when there are loaded rules AND recent file changes.
-# Lightweight — just checks if files were modified and injects a reminder.
+# Stop hook: block first stop to force rule compliance check
+# First stop → block, inject "verify compliance with all loaded rules"
+# Second stop → allow (agent already verified)
+# Uses a flag file to track state. Flag resets on each new user prompt via UserPromptSubmit.
 
 set -euo pipefail
 
@@ -18,8 +19,10 @@ fi
 
 if command -v jq &>/dev/null; then
   CWD=$(echo "$INPUT" | jq -r '.cwd // empty' 2>/dev/null || true)
+  SESSION_ID=$(echo "$INPUT" | jq -r '.session_id // empty' 2>/dev/null || true)
 else
   CWD=$(echo "$INPUT" | sed -n 's/.*"cwd"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p' | head -1)
+  SESSION_ID=""
 fi
 
 if [ -z "$CWD" ]; then
@@ -27,32 +30,45 @@ if [ -z "$CWD" ]; then
   exit 0
 fi
 
-# Only inject if flow rules exist in this project
-RULES_DIR="${CWD}/.flow/rules/always"
-if [ ! -d "$RULES_DIR" ]; then
+# Only activate if flow rules exist in this project
+if [ ! -d "${CWD}/.flow/rules/always" ]; then
   echo '{}'
   exit 0
 fi
 
-# Check if there are uncommitted changes (indicates implementation happened)
-HAS_CHANGES=$(cd "$CWD" && git diff --name-only HEAD 2>/dev/null | head -1 || true)
-if [ -z "$HAS_CHANGES" ]; then
+# Check if there are uncommitted changes (no changes = nothing to check)
+HAS_CHANGES=$(cd "$CWD" && git diff --name-only 2>/dev/null | head -1 || true)
+HAS_STAGED=$(cd "$CWD" && git diff --cached --name-only 2>/dev/null | head -1 || true)
+if [ -z "$HAS_CHANGES" ] && [ -z "$HAS_STAGED" ]; then
   echo '{}'
   exit 0
 fi
 
-CONTEXT="Before finishing: verify your changes comply with all loaded quality rules. Check for type safety, test coverage, DRY violations, and scope compliance."
+# --- Flag logic ---
+FLAG_DIR="/tmp/flow-stop-check"
+mkdir -p "$FLAG_DIR" 2>/dev/null || true
+FLAG_FILE="${FLAG_DIR}/${SESSION_ID:-default}.checked"
+
+if [ -f "$FLAG_FILE" ]; then
+  # Second stop — already verified, allow it
+  rm -f "$FLAG_FILE" 2>/dev/null || true
+  echo '{}'
+  exit 0
+fi
+
+# First stop — set flag and block
+touch "$FLAG_FILE" 2>/dev/null || true
 
 if command -v jq &>/dev/null; then
-  jq -n --arg ctx "$CONTEXT" '{
+  jq -n '{
     hookSpecificOutput: {
       hookEventName: "Stop",
-      additionalContext: $ctx
+      decision: "block",
+      reason: "Before finishing: review your changes against ALL loaded quality rules (always-on and dynamic). Verify type safety, test coverage, DRY compliance, and scope. If everything is compliant, confirm and finish."
     }
   }'
 else
-  ESCAPED=$(printf '%s' "$CONTEXT" | python3 -c 'import sys,json; print(json.dumps(sys.stdin.read()))' 2>/dev/null || printf '"%s"' "$CONTEXT")
-  echo "{\"hookSpecificOutput\":{\"hookEventName\":\"Stop\",\"additionalContext\":${ESCAPED}}}"
+  echo '{"hookSpecificOutput":{"hookEventName":"Stop","decision":"block","reason":"Before finishing: review your changes against ALL loaded quality rules (always-on and dynamic). Verify type safety, test coverage, DRY compliance, and scope. If everything is compliant, confirm and finish."}}'
 fi
 
 exit 0
