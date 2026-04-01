@@ -1,99 +1,62 @@
 ---
 name: build
-description: "Structured workflow for complex tasks. Guides through understand → plan → implement cycle with quality enforcement."
+description: "Structured workflow for complex tasks. Adaptive understand → plan → implement loop with quality enforcement and delegation."
 ---
 
-# Structured Workflow
+Invoked as `/flow:build <task description>`.
 
-Run this workflow for any non-trivial task. Invoked as `/flow:build <task description>`.
+## 1. Understand the Big Picture
 
----
+- Read all referenced files, tickets, pasted context
+- Read related code broadly — not just the files mentioned
+- Ask clarifying questions — open-ended, not formulaic
+- Restate understanding: business context, who is affected, assumptions about business logic
+- Do NOT proceed until the user signals readiness
 
-## Phase 1 — Understand
+## 2. High-Level Plan
 
-Fully understand the task before doing anything.
+- Search existing codebase for patterns, utilities, similar logic FIRST
+- Invoke the `flow:rule-evaluator` agent to evaluate which optional rules apply
+- Present the plan:
+  - **Domain understanding** — business context, assumptions
+  - **Major areas/phases** — NOT detailed task lists yet. Just the big picture breakdown.
+- Discuss trade-offs, let user adjust
+- Create/update `.flow/TASKS.md` with the high-level plan as a checklist
+- User picks which area to work on first
 
-- Read all referenced files, tickets, links, and pasted context.
-- Read related code in the codebase — look broadly.
-- Ask clarifying questions. Open-ended, specific to the task, not formulaic checklists.
-- Restate your understanding: who is affected, user-facing implications, business logic assumptions.
+## 3. Deep Dive (per selected area)
 
-**Do NOT proceed to Phase 2 until the user signals readiness.**
+This is the adaptive core. Before creating a detailed task list, the orchestrator MUST judge:
+"Do I have everything I need to implement this confidently, respecting all loaded rules?"
 
----
+- If NOT confident: research more, explore code in detail, ask the user questions. Use `flow:dev` agents for targeted exploration if needed. This is not a failure — it's thoroughness.
+- If confident: create a detailed task list for THIS AREA ONLY in `.flow/TASKS.md` (nested under the high-level item)
+- The user can override this judgment: "good enough, implement" or "go deeper"
 
-## Phase 2 — Plan
+## 4. Implement (per detailed task)
 
-### 2a. Research the codebase first
+- Delegate to `flow:dev` agents (subagent for single tasks, agentteam for parallel work)
+- Delegation instructions per work mode:
+  - **Foreground subagent**: "When encountering ambiguity that cannot be resolved by reading the codebase, use AskUserQuestion to raise it."
+  - **Agentteam workers**: "When encountering ambiguity that cannot be resolved by reading the codebase, communicate it back to the orchestrator and wait for a response."
+- After each task: verify work, run tests, update `.flow/TASKS.md`
 
-Before proposing anything:
-- Search for existing patterns, utilities, and similar logic.
-- Identify code to extend or reuse. Do not reinvent what already exists.
+## 5. Progress & Next
 
-### 2b. Evaluate optional rules
+- After completing an area: update `.flow/TASKS.md`, mark items done
+- Present: "Here's what's done, here's what's next"
+- User picks next area → back to step 3
+- User may `/rewind` to any checkpoint
+- User may `/clear` when done
 
-Read `.flow/rules/optional/`. Determine which are relevant to this task. Load them. Note which you loaded and why.
+## Rules
 
-### 2c. Present the plan in two parts
+Quality rules are active via hooks (always-on rules injected at session start, optional rules evaluated by flow:rule-evaluator). Follow them. If a rule conflicts with the user's explicit instruction, mention it and follow the user.
 
-**Domain understanding:**
-- Business context — what problem this solves, who benefits, what changes for users
-- Assumptions about business logic — state them explicitly
+## Key Principles
 
-**Technical plan:**
-- Numbered sub-tasks, each focused and independently implementable
-- For each: what existing code to extend/reuse, what to create, approach
-- Testing strategy per sub-task
-
-### 2d. Discuss trade-offs
-
-Present alternatives considered and why you chose this approach. Let the user adjust.
-
-### 2e. Checkpoint
-
-Once approved, this is the **/rewind checkpoint**. `/rewind` returns here for the next sub-task.
-
----
-
-## Phase 3 — Implement
-
-User confirms plan and says which sub-task to start.
-
-### Delegation
-
-Choose the right delegation model based on the work:
-
-**Single sub-task (no parallelism) → foreground subagent:**
-- Instruct the subagent: "When encountering ambiguity that cannot be resolved by reading the codebase, use AskUserQuestion to raise it."
-
-**Parallel sub-tasks → agentteam:**
-- Instruct workers: "When encountering ambiguity that cannot be resolved by reading the codebase, communicate it back to the orchestrator and wait for a response."
-- As orchestrator: consolidate questions from workers, discuss with the user, relay answers back.
-
-For all delegated agents:
-- Pass relevant context and the current sub-task scope.
-- Quality rules are injected automatically via hooks — no need to repeat them.
-- Verify their work after completion.
-
-### TDD approach
-- Write tests first when possible.
-- After each sub-task: run tests, verify compilation, report results.
-
-### Sub-task cycle
-1. User says which sub-task to work on.
-2. Implement via delegation.
-3. Run tests and verify.
-4. Report results — what was done, what was tested, any issues.
-5. User may `/rewind` to plan checkpoint for next sub-task.
-6. User may `/clear` when all sub-tasks are done.
-
----
-
-## Quality rules
-
-Quality rules are active via hooks:
-- **Always-on rules** injected at session start and into every subagent automatically.
-- **Optional rules** evaluated in Phase 2 and loaded when relevant.
-- **Post-write scanning** after every file edit.
-
-Follow them. If a rule conflicts with the user's explicit instruction, mention it and follow the user.
+- NEVER plan all details upfront — plan the big picture, then deep dive per area
+- NEVER implement when not confident — research more, ask questions
+- NEVER create detailed task lists for areas not being worked on yet
+- The `.flow/TASKS.md` file is the living progress tracker — always keep it updated
+- The orchestrator's job is reasoning, planning, and verification — delegate implementation
