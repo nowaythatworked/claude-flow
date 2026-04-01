@@ -1,4 +1,6 @@
-keywords: review, coderabbit, feedback, comment, pr review, unresolved
+---
+description: "How to triage and respond to PR reviews from CodeRabbit, humans, or other LLMs."
+---
 # Responding to PR Reviews
 
 When the user pastes review comments (CodeRabbit, human, or other LLM):

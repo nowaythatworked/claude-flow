@@ -1,4 +1,6 @@
-keywords: decode, extraction, pipeline, mailsage, transport, draft, finalized
+---
+description: "Domain rules for the decode extraction pipeline. Load when working on decode, extraction, mailsage, or transport processing."
+---
 # Decode Pipeline Domain Knowledge
 
 The decode extraction pipeline processes logistics transport emails:

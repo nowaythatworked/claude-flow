@@ -1,4 +1,6 @@
-keywords: ui, frontend, component, css, style, layout, responsive, react, tailwind, design
+---
+description: "UI component quality standards. Load when implementing or modifying frontend components, layouts, or styling."
+---
 # UI Quality Standards
 
 When implementing UI components:

@@ -1,4 +1,6 @@
-keywords: commit, branch, merge, rebase, pull request, pr, git, worktree, cherry-pick
+---
+description: "Git operation safety rules. Load when doing commits, merges, branch management, or worktree operations."
+---
 # Git Workflow Rules
 
 Before ANY git operation: verify the current branch with `git branch`.
