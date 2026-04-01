@@ -18,8 +18,8 @@ Invoked as `/flow:build <task description>`.
 - Search existing codebase for patterns, utilities, similar logic FIRST
 - Invoke the `flow:rule-evaluator` agent to evaluate which optional rules apply
 - Present the plan:
-  - **Domain understanding** — business context, assumptions
-  - **Major areas/phases** — NOT detailed task lists yet. Just the big picture breakdown.
+  - **Domain understanding** — business context, assumptions about how the system works
+  - **Major areas** — NOT detailed task lists yet. Just the big picture breakdown.
 - Discuss trade-offs, let user adjust
 - Create/update `.flow/TASKS.md` with the high-level plan as a checklist
 - User picks which area to work on first
@@ -29,7 +29,7 @@ Invoked as `/flow:build <task description>`.
 This is the adaptive core. Before creating a detailed task list, the orchestrator MUST judge:
 "Do I have everything I need to implement this confidently, respecting all loaded rules?"
 
-- If NOT confident: research more, explore code in detail, ask the user questions. Use `flow:dev` agents for targeted exploration if needed. This is not a failure — it's thoroughness.
+- If NOT confident: research more, explore code in detail, ask the user questions. This is not a failure — it's thoroughness.
 - If confident: create a detailed task list for THIS AREA ONLY in `.flow/TASKS.md` (nested under the high-level item)
 - The user can override this judgment: "good enough, implement" or "go deeper"
 
@@ -41,13 +41,22 @@ This is the adaptive core. Before creating a detailed task list, the orchestrato
   - **Agentteam workers**: "When encountering ambiguity that cannot be resolved by reading the codebase, communicate it back to the orchestrator and wait for a response."
 - After each task: verify work, run tests, update `.flow/TASKS.md`
 
-## 5. Progress & Next
+## 5. After /rewind — Resuming Work
+
+When the user rewinds to the plan checkpoint to start the next area:
+- Read `.flow/TASKS.md` to see what's been completed
+- Check `git log --oneline -20` for recent commits to understand what was implemented
+- Do NOT re-research or re-plan areas that are already done
+- Pick up from where the checklist shows incomplete work
+- The user's message after rewind tells you which area to work on next
+
+## 6. Progress & Next
 
 - After completing an area: update `.flow/TASKS.md`, mark items done
 - Present: "Here's what's done, here's what's next"
 - User picks next area → back to step 3
-- User may `/rewind` to any checkpoint
-- User may `/clear` when done
+- User may `/rewind` to plan checkpoint, edit their message to specify the next area
+- User uses `/fork` to create named checkpoints for easy session resumption later
 
 ## Rules
 
@@ -59,4 +68,5 @@ Quality rules are active via hooks (always-on rules injected at session start, o
 - NEVER implement when not confident — research more, ask questions
 - NEVER create detailed task lists for areas not being worked on yet
 - The `.flow/TASKS.md` file is the living progress tracker — always keep it updated
+- After /rewind, always check TASKS.md + git log before proceeding
 - The orchestrator's job is reasoning, planning, and verification — delegate implementation

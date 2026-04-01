@@ -16,35 +16,48 @@ The concepts behind these frameworks are sound — discuss before implementing, 
 
 ## The Core Workflow: Rewind & Fork
 
-Flow's execution model uses Claude Code's native `/rewind` and `/fork` as first-class workflow tools, not just error recovery.
+Flow uses Claude Code's native `/rewind` and `/fork` as first-class workflow tools — not just error recovery, but the primary execution model.
 
-### Rewind-to-Plan
+### How /rewind Works in Claude Code
 
-For multi-part tasks, the conversation builds up understanding and produces a plan. This plan is the **checkpoint**. Implementation happens one area at a time:
+Every message you send creates a checkpoint. `/rewind` (or `Esc Esc`) opens a scrollable list of all your messages. You pick one, and Claude Code restores conversation and code to that point. Your original message is placed back in the input field so you can edit and re-send it. Git commits persist through rewinds — code that was committed is not lost.
+
+### Rewind-to-Plan: The Execution Model
+
+For multi-part tasks, the conversation builds understanding and produces a plan. You then tell the orchestrator which area to implement first — **this message is the checkpoint**:
 
 ```
-Understand → Discuss → Plan (checkpoint)
-  → /rewind to plan → Implement area 1 → commit
-  → /rewind to plan → Implement area 2 → commit
-  → /rewind to plan → Implement area 3 → commit
-  → /clear → next thing
+Understand → Discuss → Plan agreed
+  → "Start implementing area 1" (this is the checkpoint)
+  → orchestrator delegates, agents implement, tests pass, commit
+  → /rewind (returns to "Start implementing area 1")
+  → edit message to "Start implementing area 2"
+  → orchestrator checks TASKS.md + git log, sees area 1 is done
+  → delegates area 2 implementation
+  → /rewind → "Start implementing area 3" → ...
 ```
 
-Everything before the rewind point — the discussion, domain knowledge, nuances, the plan itself — stays in context. Each implementation gets a clean context window while inheriting the full understanding. Git commits persist through rewinds. You lose nothing.
+Everything before the checkpoint — the discussion, domain knowledge, nuances, the plan — stays in context. Each implementation area gets a clean context while inheriting the full understanding. The orchestrator reads `.flow/TASKS.md` and recent git history after each rewind to understand what was already completed.
 
-### Fork for Exploration
+### Fork for Checkpointing & Exploration
 
-When you want to explore an alternative approach without losing current state:
+`/fork` (or `/branch`) creates a named branch of the conversation at the current point. Two use cases:
+
+**Fine-grained checkpointing:** Before a risky implementation, fork to save the current state. If it goes wrong, you have a clean restore point.
+
+```
+Plan agreed → /fork before-refactor → implement risky refactor
+→ went wrong? resume the fork. went well? continue.
+```
+
+**Exploration:** Try alternative approaches without losing work.
 
 ```
 Plan A agreed → implement → /fork explore-plan-b
-→ /rewind → try Plan B instead
-→ compare results → pick the winner
+→ /rewind → try Plan B instead → compare results
 ```
 
-### Clear for Phase Transitions
-
-`/clear` resets context between major work units. It's the primary tool for moving between tasks, not `/rewind`.
+**Session resumption:** Named forks make it easy to return to a specific point in future sessions via `/resume`.
 
 ## Analysis-Driven Design
 
@@ -140,12 +153,16 @@ Agents raise ambiguity through the appropriate channel:
 
 After each task: verify, test, update `.flow/TASKS.md`.
 
-### 5. Next
-Mark area done. Present progress. User picks next area → back to step 3.
+### 5. After /rewind — Next Area
+After the user rewinds to the plan checkpoint and edits their message for the next area:
 
-- `/rewind` to return to plan checkpoint for next area (clean implementation context)
-- `/fork` to checkpoint before exploring alternatives
-- `/clear` when all areas are done
+- Orchestrator reads `.flow/TASKS.md` to see what's been completed
+- Checks `git log` for recent commits to understand what was implemented
+- Does NOT re-research or re-plan completed areas
+- Picks up from where the checklist shows incomplete work
+- Deep dives into the new area (back to step 3)
+
+Use `/fork` before risky implementations or to create resume points for future sessions.
 
 ## Commands
 
