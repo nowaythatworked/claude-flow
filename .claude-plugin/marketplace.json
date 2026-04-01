@@ -9,7 +9,7 @@
   "plugins": [
     {
       "name": "flow",
-      "source": ".",
+      "source": "./",
       "description": "Quality enforcement and adaptive workflow framework for Claude Code. Designed for production monorepos.",
       "version": "0.1.0"
     }
