@@ -11,7 +11,7 @@
       "name": "flow",
       "source": "./",
       "description": "Quality enforcement and adaptive workflow framework for Claude Code. Designed for production monorepos.",
-      "version": "0.1.0"
+      "version": "0.1.1"
     }
   ]
 }
