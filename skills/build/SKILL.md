@@ -38,7 +38,7 @@ Invoked as `/flow:build <task description>`.
 - If confident: create a detailed task list for THIS AREA ONLY in `.flow/TASKS.md` (nested under the high-level item)
 - The user can override this judgment: "good enough, implement" or "go deeper"
 
-**Note important discoveries.** If something comes up that could affect other areas — a codebase quirk, an unexpected constraint, a domain insight — jot it down in `.flow/TASKS.md`. Don't document everything. Just the stuff you'd forget after a rewind and wish you hadn't.
+**Note important discoveries.** If something comes up that could affect other areas — a codebase quirk, an unexpected constraint, a domain insight — jot it down in `.flow/TASKS.md`. Don't document everything. Just the stuff thats important for other sub-tasks, which you'd forget after a rewind and wish you hadn't.
 
 ## 4. Implement (per detailed task)
 
@@ -46,7 +46,7 @@ Invoked as `/flow:build <task description>`.
 - Delegation instructions per work mode:
   - **Foreground subagent**: "When encountering ambiguity that cannot be resolved by reading the codebase, use AskUserQuestion to raise it."
   - **Agentteam workers**: "When encountering ambiguity that cannot be resolved by reading the codebase, communicate it back to the orchestrator and wait for a response."
-- After each task: verify work, run tests, update `.flow/TASKS.md`
+- After each task: verify work, run tests, update `.flow/TASKS.md`, ensure implementation is compliant with the loaded rules
 
 ## 5. Progress & Next
 
@@ -66,4 +66,4 @@ Quality rules are active via hooks (always-on rules injected at session start, o
 - NEVER implement when not confident — research more, ask questions
 - NEVER create detailed task lists for areas not being worked on yet
 - The `.flow/TASKS.md` file is the living progress tracker — always keep it updated
-- The orchestrator's job is reasoning, planning, and verification — delegate implementation
+- The orchestrator's job is reasoning, planning, and verification — delegate implementation, research & heavy planning
