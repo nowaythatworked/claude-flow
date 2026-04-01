@@ -200,3 +200,58 @@ Flow creates a focused rule file in the right directory. Immediately active for 
 - **Rules grow organically** — start with the defaults, add rules as you discover patterns. Every shipped rule traces to a real correction from real sessions.
 - **Hooks for enforcement, not prompts** — prompt instructions get forgotten mid-session. Hooks fire every time. Quality rules are injected mechanically, not relied upon from memory.
 - **Agents learn** — `flow:dev` has persistent project memory. After 10 sessions it knows your codebase conventions, patterns, and gotchas.
+
+## Coming from GSD/VBW?
+
+If you've been using GSD or VBW, here's what's different and why.
+
+### What GSD/VBW get right
+
+The core ideas are solid: discuss before implementing, delegate to specialized agents, verify work, track progress, surface assumptions. Flow keeps all of these — they're encoded in the always-on rules and the `/flow:build` workflow.
+
+### Where they break down on real projects
+
+**The .planning/ directory becomes noise.** GSD creates PROJECT.md, REQUIREMENTS.md, ROADMAP.md, STATE.md, CONTEXT.md, SUMMARY.md, and RESEARCH.md per phase. In practice, agents skim or ignore these files. Important decisions written to CONTEXT.md get lost because the executing agent starts fresh and doesn't internalize the nuance. You end up re-explaining things that were already discussed.
+
+**The phase lifecycle is too rigid.** `map-codebase → new-project → discuss-phase → list-assumptions → plan-phase → execute-phase → verify-work` — this pipeline makes sense for a greenfield feature. On a production monorepo, you're often fixing a bug that spans 3 packages, responding to a PR review, refactoring a pipeline, or implementing a ticket that's already half-specified. The lifecycle doesn't flex to these shapes.
+
+**Wave-based execution loses human oversight.** GSD's executor groups tasks into waves and runs them in parallel with minimal intervention. This works for independent tasks but falls apart when tasks interact — agents overwrite each other's changes, make conflicting architectural decisions, or silently diverge from the plan. You discover the mess after the wave completes.
+
+**Agent teams get stuck.** VBW's managed agent teams caused "inherit" model errors, cross-session interference, stuck agents requiring force-kill, and config management headaches. The framework spent more time managing agents than doing work.
+
+**Init ceremony wastes time.** Before doing any work: `/gsd:new-project` (questioning, research agents, requirements derivation, roadmap creation), then `/gsd:discuss-phase`, then `/gsd:list-phase-assumptions`, then `/gsd:plan-phase`, then finally `/gsd:execute-phase`. For a focused 2-hour task, this ceremony can take longer than the actual work.
+
+### How flow handles the same needs
+
+| GSD/VBW | Flow | Why |
+|---------|------|-----|
+| `map-codebase` → project.md | No mapping. Codebase is truth. | Monorepos can't be summarized. Agents explore on-demand. |
+| `discuss-phase` (formulaic) | Open-ended discussion until clear | User decides when understanding is sufficient, not a step count. |
+| `list-phase-assumptions` | Domain understanding in plans | Each plan states business context assumptions. Task-scoped, not project-scoped. |
+| `plan-phase` → PLAN.md file | In-context plan, `.flow/TASKS.md` checklist | Plan lives in conversation context (preserved through /rewind). TASKS.md is just a progress tracker. |
+| `execute-phase` (waves) | Delegate to `flow:dev` agents | User controls pacing. One area at a time. Parallel when appropriate, not forced. |
+| `verify-work` (UAT agent) | TDD + `/coderabbit` + `/score-pr` | Composable quality tools, not a monolithic verify step. |
+| `.planning/` state directory | `.flow/TASKS.md` + conversation context | One file for progress tracking. Understanding stays in context, not files. |
+| Framework-managed agent teams | Natural delegation (subagents/agentteam) | User says "use subagents" or "use agentteam." Claude picks. No framework lifecycle management. |
+
+### The key insight
+
+GSD/VBW optimize for **completeness** — making sure every step is documented, every phase has artifacts, every agent has state files. Flow optimizes for **effectiveness** — making sure the agent understands the task, writes quality code, and doesn't repeat your corrections. The documentation is the code. The state is the conversation. The artifacts are the commits.
+
+## Why Not Just Claude Code Rules?
+
+Claude Code has a native `.claude/rules/` system. Flow uses it for always-on rules but adds capabilities that native rules can't provide:
+
+### What native rules can do
+- Auto-load `.md` files at session start
+- Conditionally load rules based on file path patterns (`paths:` frontmatter)
+- Survive context compaction (re-read from disk)
+
+### What native rules can't do
+- **Inject into subagents.** Subagents don't inherit `.claude/rules/`. When you delegate to a subagent, it starts blind — no type safety rules, no DRY enforcement, no TDD. This is the biggest gap. Flow's `SubagentStart` hook fixes this by injecting rules into every subagent's context.
+- **Evaluate semantically.** Native `paths:` matching is hardcoded to file glob patterns. It can't reason about *what you're working on* — only *which files you opened*. Flow uses Sonnet to evaluate optional rules based on the actual prompt and conversation context.
+- **Re-evaluate as context evolves.** Native rules load once (or when a matching file is opened). Flow re-evaluates every 15 tool uses by reading the conversation transcript, catching when your work shifts to a different domain mid-session.
+- **Scan for quality violations.** Native rules are passive — they provide guidance but can't enforce it. Flow's `PostToolUse` hook actively scans every file write for `any` types, unsafe assertions, and unexplained `@ts-ignore` directives.
+- **Learn across sessions.** Native rules are static files. Flow's `flow:dev` agent has persistent project memory that accumulates codebase knowledge across sessions — patterns, conventions, gotchas discovered during work.
+
+Flow and native rules are complementary. Use `.claude/rules/` for project-wide conventions (coding style, architecture decisions, domain glossary). Use `.flow/rules/` for quality enforcement that needs hooks, evaluation, and subagent injection.
