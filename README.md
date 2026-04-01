@@ -10,6 +10,7 @@ Flow was born from frustration with existing frameworks (VBW, GSD) on production
 - **Project.md doesn't scale.** A monorepo can't be summarized in one file. The summaries are always incomplete, stale, and agents ignore them anyway.
 - **Formulaic questioning misses the point.** "List 4 gray areas" doesn't surface real misunderstandings. Open-ended discussion does.
 - **Framework ceremony creates friction.** Init scaffolding, lifecycle commands, config management, stuck agents, model errors. The overhead exceeds the value.
+- **Workflows are black boxes you can't steer.** Want to enforce "run `agent-browser` after every UI change" or "always lint before committing"? You can't. The workflow is a fixed pipeline — you either use their steps or you don't. Injecting project-specific quality checks, verification tools, or custom behaviors between steps isn't possible without forking the framework.
 - **Codebase mapping is redundant.** The codebase IS the truth. CLAUDE.md has conventions, tests have patterns, docs exist. Generated architecture summaries add noise.
 
 The concepts behind these frameworks are sound — discuss before implementing, delegate to agents, verify work, track progress. Flow keeps the concepts and drops the ceremony.
@@ -20,24 +21,27 @@ Flow uses Claude Code's native `/rewind` and `/fork` as first-class workflow too
 
 ### How /rewind Works in Claude Code
 
-Every message you send creates a checkpoint. `/rewind` (or `Esc Esc`) opens a scrollable list of all your messages. You pick one, and Claude Code restores conversation and code to that point. Your original message is placed back in the input field so you can edit and re-send it. Git commits persist through rewinds — code that was committed is not lost.
+Every message you send creates a checkpoint. `/rewind` (or `Esc Esc`) opens a scrollable list of all your messages. You pick one, and Claude Code offers three options: restore conversation only (keep code as-is), restore conversation and code, or summarize conversation. Your original message is placed back in the input field so you can edit and re-send it. For Flow's rewind-to-plan pattern, you typically restore conversation only — the committed code stays, but the agent gets a clean context back at the plan checkpoint.
 
 ### Rewind-to-Plan: The Execution Model
 
-For multi-part tasks, the conversation builds understanding and produces a plan. You then tell the orchestrator which area to implement first — **this message is the checkpoint**:
+For multi-part tasks, the conversation builds understanding and produces a high-level plan. You then tell the orchestrator which area to work on — **this message is the checkpoint**:
 
 ```
-Understand → Discuss → Plan agreed
-  → "Start implementing area 1" (this is the checkpoint)
-  → orchestrator delegates, agents implement, tests pass, commit
-  → /rewind (returns to "Start implementing area 1")
-  → edit message to "Start implementing area 2"
-  → orchestrator checks TASKS.md + git log, sees area 1 is done
-  → delegates area 2 implementation
-  → /rewind → "Start implementing area 3" → ...
+Understand → Discuss → High-level plan agreed
+  → "Work on area 1" (this is the checkpoint)
+  → orchestrator deep dives: researches, asks questions, forms detailed plan
+  → delegates to agents, implements, tests, commits
+  → /rewind (returns to "Work on area 1")
+  → edit message to "Work on area 2"
+  → orchestrator orients (reads TASKS.md + git log, sees area 1 done)
+  → deep dives area 2, implements, commits
+  → /rewind → "Work on area 3" → ...
 ```
 
-Everything before the checkpoint — the discussion, domain knowledge, nuances, the plan — stays in context. Each implementation area gets a clean context while inheriting the full understanding. The orchestrator reads `.flow/TASKS.md` and recent git history after each rewind to understand what was already completed.
+Everything before the checkpoint — the discussion, domain knowledge, nuances, the high-level plan — stays in context. Each area gets its own deep dive and clean implementation context. Git commits persist through rewinds. The orchestrator reads `.flow/TASKS.md` and git history to understand what's already done before starting each new area.
+
+For smaller tasks where all areas can be done in one go, no rewind is needed — the orchestrator implements everything and you're done.
 
 ### Fork for Checkpointing & Exploration
 
@@ -110,9 +114,12 @@ The combination of growing rules + learning agents means flow gets better the mo
 ## Quick Start
 
 ```bash
-# Test it
-cd your-project
-claude --plugin-dir ~/path/to/claude-flow
+# Install (once per machine)
+/plugin marketplace add nowaythatworked/claude-flow
+/plugin install flow@claude-flow
+
+# Or install project-scoped (shared with team via .claude/settings.json)
+/plugin install flow@claude-flow --scope project
 
 # Initialize (scaffolds .flow/ with rules)
 /flow:init
@@ -165,34 +172,42 @@ Not a rigid pipeline. An adaptive loop where the orchestrator continuously judge
 Read context, ask questions, discuss. Restate understanding including business context and domain assumptions. The user decides when understanding is sufficient — not a hardcoded step count.
 
 ### 2. High-Level Plan
-Search existing codebase first. Evaluate optional rules. Present major areas — NOT detailed task lists yet. Discuss trade-offs. Create `.flow/TASKS.md` with the high-level checklist. User picks which area to work on.
+Search existing codebase for patterns and similar logic first. Evaluate optional rules. Present major areas — NOT detailed task lists yet. Discuss trade-offs. Create `.flow/TASKS.md` as a scratchpad/checklist. User picks which area to work on.
 
 ### 3. Deep Dive (per area)
-Before making a detailed plan, the orchestrator asks itself: *"Do I have everything I need to implement this confidently, respecting all loaded rules?"*
 
-- **Not confident?** Research more, explore code, ask the user. This is thoroughness, not failure.
-- **Confident?** Create a detailed task list for THIS area only in `.flow/TASKS.md`.
+**Orient first.** Read `.flow/TASKS.md` and `git log` to understand current state — what's done, what's in progress, any notes from previous areas.
+
+**Judge confidence.** *"Do I have everything I need to implement this area confidently, respecting all loaded rules?"*
+
+- **Not confident?** Research more (delegate to subagents), explore code, ask the user. This is thoroughness, not failure.
+- **Confident?** Create a detailed task list for THIS area only.
 - The user can override: *"good enough, implement"* or *"go deeper."*
 
+Note important discoveries in `.flow/TASKS.md` that could affect other areas.
+
 ### 4. Implement
-Delegate to `flow:dev` agents. Single tasks → foreground subagent. Parallel tasks → agentteam.
+Delegate to `flow:dev` agents. Single tasks → foreground subagent. Parallel tasks → agentteam. Ensure implementation complies with loaded rules. After each task: verify, test, update `.flow/TASKS.md`.
 
-Agents raise ambiguity through the appropriate channel:
-- **Foreground subagent**: AskUserQuestion (passes through to user)
-- **Agentteam worker**: communicates back to orchestrator, who discusses with user
+### 5. Next Area
+After completing an area, the user has two options:
 
-After each task: verify, test, update `.flow/TASKS.md`.
+**Continue in the same context:** If context isn't bloated, the orchestrator presents progress and the user picks the next area. Back to step 3.
 
-### 5. After /rewind — Next Area
-After the user rewinds to the plan checkpoint and edits their message for the next area:
+**Rewind for a clean context:** The user runs `/rewind`, selects the message where they chose the first area (e.g., "Work on area 1"), and edits it to "Work on area 2." The orchestrator gets a clean context with the full discussion and plan still intact, orients via TASKS.md + git log, and deep dives the new area.
 
-- Orchestrator reads `.flow/TASKS.md` to see what's been completed
-- Checks `git log` for recent commits to understand what was implemented
-- Does NOT re-research or re-plan completed areas
-- Picks up from where the checklist shows incomplete work
-- Deep dives into the new area (back to step 3)
+**When to use each:**
+- Small tasks (2-3 areas, quick implementation) → just continue, no rewind needed
+- Large tasks (many areas, heavy implementation) → rewind between areas to keep context clean
+- Risky changes → `/fork` before implementing, resume the fork if it goes wrong
 
-Use `/fork` before risky implementations or to create resume points for future sessions.
+### Scaling: Small to Large Tasks
+
+The workflow adapts to task size:
+
+- **Small task** (fix a function, add a parameter): Steps 1-2 happen in one exchange. Step 3: already confident. Step 4: single agent does it all. No TASKS.md, no rewind.
+- **Medium task** (implement a feature across a few files): Full loop but all areas done in one session without rewinds.
+- **Large task** (multi-area ticket, system redesign): High-level plan, rewind between areas, TASKS.md as scratchpad, deep dives per area.
 
 ## Commands
 
@@ -224,7 +239,7 @@ your-project/
         └── optional/        # Project-specific domain rules (starts empty)
 ```
 
-Commit `.flow/` to git. Teammates get the rules by cloning.
+Commit `.flow/` to git. Teammates get the rules by cloning your project repo.
 
 ## Adding Rules
 
@@ -276,8 +291,8 @@ The core ideas are solid: discuss before implementing, delegate to specialized a
 | `discuss-phase` (formulaic) | Open-ended discussion until clear | User decides when understanding is sufficient, not a step count. |
 | `list-phase-assumptions` | Domain understanding in plans | Each plan states business context assumptions. Task-scoped, not project-scoped. |
 | `plan-phase` → PLAN.md file | In-context plan, `.flow/TASKS.md` checklist | Plan lives in conversation context (preserved through /rewind). TASKS.md is just a progress tracker. |
-| `execute-phase` (waves) | Delegate to `flow:dev` agents | User controls pacing. One area at a time. Parallel when appropriate, not forced. |
-| `verify-work` (UAT agent) | TDD + `/coderabbit` + `/score-pr` | Composable quality tools, not a monolithic verify step. |
+| `execute-phase` (waves) | Similar, but has implicit instructions to not make decisions while implementing. The user is more in the loop if ambiguity comes up during implementation. Uses subagents and agentteams. | User controls pacing. One area at a time. Parallel when appropriate, not forced. |
+| `verify-work` (UAT agent) | TDD + manual quality assurances like `/simplify` & `/coderabbit` | Composable quality tools, not a monolithic verify step. Might be changed in the future once the workflow matures |
 | `.planning/` state directory | `.flow/TASKS.md` + conversation context | One file for progress tracking. Understanding stays in context, not files. |
 | Framework-managed agent teams | Natural delegation (subagents/agentteam) | User says "use subagents" or "use agentteam." Claude picks. No framework lifecycle management. |
 
