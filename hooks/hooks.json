@@ -38,7 +38,7 @@
           {
             "type": "command",
             "command": "${CLAUDE_PLUGIN_ROOT}/scripts/periodic-rule-eval.sh",
-            "timeout": 60
+            "timeout": 10
           }
         ]
       }
