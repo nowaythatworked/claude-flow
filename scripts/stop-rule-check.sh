@@ -1,8 +1,8 @@
 #!/bin/bash
 # Stop hook: block first stop to force rule compliance check
-# First stop → block, inject "verify compliance with all loaded rules"
-# Second stop → allow (agent already verified)
-# Uses a flag file to track state. Flag resets on each new user prompt via UserPromptSubmit.
+# Uses stop_hook_active field (built-in) instead of flag files.
+# First stop (stop_hook_active=false) → block
+# Second stop (stop_hook_active=true) → allow
 
 set -euo pipefail
 
@@ -13,38 +13,23 @@ else
 fi
 
 if [ -z "$INPUT" ]; then
-  echo '{}'
   exit 0
 fi
 
+# Check if stop hook already blocked once — always allow second attempt
 if command -v jq &>/dev/null; then
-  CWD=$(echo "$INPUT" | jq -r '.cwd // empty' 2>/dev/null || true)
-  SESSION_ID=$(echo "$INPUT" | jq -r '.session_id // empty' 2>/dev/null || true)
+  ACTIVE=$(echo "$INPUT" | jq -r '.stop_hook_active // false' 2>/dev/null || echo "false")
 else
-  CWD=$(echo "$INPUT" | sed -n 's/.*"cwd"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p' | head -1)
-  SESSION_ID=""
+  ACTIVE=$(echo "$INPUT" | grep -o '"stop_hook_active"[[:space:]]*:[[:space:]]*true' | head -1)
+  [ -n "$ACTIVE" ] && ACTIVE="true" || ACTIVE="false"
 fi
 
-if [ -z "$CWD" ]; then
-  echo '{}'
+if [ "$ACTIVE" = "true" ]; then
+  # Second stop — allow
   exit 0
 fi
 
-# --- Flag logic ---
-FLAG_DIR="/tmp/flow-stop-check"
-mkdir -p "$FLAG_DIR" 2>/dev/null || true
-FLAG_FILE="${FLAG_DIR}/${SESSION_ID:-default}.checked"
-
-if [ -f "$FLAG_FILE" ]; then
-  # Second stop — already verified, allow it
-  rm -f "$FLAG_FILE" 2>/dev/null || true
-  echo '{}'
-  exit 0
-fi
-
-# First stop — set flag and block
-touch "$FLAG_FILE" 2>/dev/null || true
-
+# First stop — block and request compliance check
 if command -v jq &>/dev/null; then
   jq -n '{
     hookSpecificOutput: {

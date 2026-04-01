@@ -33,9 +33,6 @@ if [ -z "$CWD" ]; then
   exit 0
 fi
 
-# Reset stop-check flag on new user prompt
-FLAG_DIR="/tmp/flow-stop-check"
-rm -f "${FLAG_DIR}/${SESSION_ID:-default}.checked" 2>/dev/null || true
 
 OPTIONAL_DIR="${CWD}/.flow/rules/dynamic"
 if [ ! -d "$OPTIONAL_DIR" ]; then
