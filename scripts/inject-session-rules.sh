@@ -42,8 +42,8 @@ esac
 
 CONTEXT=""
 
-# --- Always-on rules from .claude/rules/ ---
-RULES_DIR="${CWD}/.claude/rules"
+# --- Always-on rules from .flow/rules/always/ ---
+RULES_DIR="${CWD}/.flow/rules/always"
 if [ -d "$RULES_DIR" ]; then
   ALWAYS_RULES=""
   for f in "$RULES_DIR"/*.md; do

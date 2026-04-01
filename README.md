@@ -106,8 +106,8 @@ Mark area done. Present progress. User picks next area → back to step 3. Use `
 
 ```
 your-project/
-├── .claude/
-│   └── rules/                  # Always-on rules (native Claude Code)
+└── .flow/
+    ├── TASKS.md                # Living progress tracker
 │       ├── 01-understand-first.md
 │       ├── 02-reuse-existing.md
 │       └── ... (8 files)

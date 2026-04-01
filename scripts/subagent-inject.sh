@@ -1,6 +1,6 @@
 #!/bin/bash
 # SubagentStart hook: inject quality rules into subagent context
-# Reads always-on rules from the project's .claude/rules/ and optional rules
+# Reads always-on rules from .flow/rules/always/ and optional rules
 # from .flow/rules/optional/ to give subagents the necessary context.
 
 set -euo pipefail
@@ -38,8 +38,8 @@ fi
 # --- Collect rules ---
 RULES=""
 
-# Always-on rules from project's .claude/rules/
-RULES_DIR="${CWD}/.claude/rules"
+# Always-on rules from .flow/rules/always/
+RULES_DIR="${CWD}/.flow/rules/always"
 if [ -d "$RULES_DIR" ]; then
   for f in "$RULES_DIR"/*.md; do
     [ -f "$f" ] || continue

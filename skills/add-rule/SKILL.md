@@ -20,7 +20,7 @@ Get the core principle in one sentence.
 
 Determine the right category:
 
-- **Always-on** — universal rules that apply to every task regardless of context (e.g., "never commit .env files", "restate understanding before implementing"). These go in `.claude/rules/` as native Claude Code rules.
+- **Always-on** — universal rules that apply to every task regardless of context (e.g., "never commit .env files", "restate understanding before implementing"). These go in `.flow/rules/always/` as native Claude Code rules.
 - **Optional** — domain-specific or situational rules that only matter for certain types of work (e.g., "decode pipeline conventions", "UI accessibility patterns"). These go in `.flow/rules/optional/`.
 
 If unclear, ask the user. Default to optional — it's easier to promote a rule than to demote one.
