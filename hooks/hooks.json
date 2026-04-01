@@ -53,17 +53,6 @@
           }
         ]
       }
-    ],
-    "Stop": [
-      {
-        "hooks": [
-          {
-            "type": "command",
-            "command": "${CLAUDE_PLUGIN_ROOT}/scripts/stop-rule-check.sh",
-            "timeout": 5
-          }
-        ]
-      }
     ]
   }
 }
