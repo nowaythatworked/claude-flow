@@ -129,7 +129,7 @@ ${RECENT_CONTEXT:-no transcript available}
 Respond with ONLY a JSON array of relevant rule filenames. Example: [\"decode-pipeline.md\", \"ui-quality.md\"]
 If no rules are relevant, respond with: []"
 
-SELECTED=$(echo "$EVAL_PROMPT" | claude -p --model sonnet --output-format json --bare 2>/dev/null || echo "[]")
+SELECTED=$(echo "$EVAL_PROMPT" | claude -p --model sonnet --output-format json 2>/dev/null | jq -r ".result // empty" 2>/dev/null || echo "[]")
 
 # --- Check if selection changed ---
 if [ "$SELECTED" = "$PREV_SELECTION" ]; then
