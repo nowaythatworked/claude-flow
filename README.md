@@ -116,12 +116,15 @@ Delegate to `flow:dev` agents. Single tasks → foreground subagent. Parallel ta
 
 ### Custom Agents
 
-| Agent | Purpose |
-|-------|---------|
-| `flow:dev` | Implementation agent with persistent project memory. Learns codebase patterns across sessions. TDD-first. Has extra rule-following enforcement via hooks. |
-| `flow:rule-evaluator` | Evaluates which dynamic rules are relevant. Used by hooks and orchestrator. Sonnet, read-only. |
+| Agent | Where | Purpose |
+|-------|-------|---------|
+| `flow-dev` | `.claude/agents/` (project) | Implementation agent with persistent memory, TDD-first, Stop hook for rule compliance. Customizable per project. |
+| `flow:rule-evaluator` | Plugin | Evaluates which dynamic rules are relevant. Used by hooks and orchestrator. Sonnet, read-only. |
 
-The `flow:dev` agent accumulates project knowledge across sessions — conventions, patterns, gotchas. This persists via git and is shared with the team.
+`flow-dev` is installed to your project by `/flow:init`, not kept in the plugin. This is intentional:
+- **Full hook support** — project-level agents can have hooks (plugin agents can't). The Stop hook blocks the agent from finishing until it verifies compliance with all loaded rules.
+- **Customizable** — each project can adjust the agent's system prompt, add hooks, change the model. It's a template you own, not a black box.
+- **Shared via git** — teammates get the agent by cloning. No per-developer setup.
 
 ## Commands
 
@@ -139,15 +142,19 @@ After running `/flow:init`:
 ```
 your-project/
 ├── .claude/
-│   └── rules/              # Team's native Claude Code rules (untouched)
+│   ├── agents/
+│   │   └── flow-dev.md      # Implementation agent (with Stop hook)
+│   └── rules/               # Team's native Claude Code rules (untouched)
 └── .flow/
-    ├── TASKS.md             # Scratchpad / progress tracker
+    ├── TASKS.md              # Scratchpad / progress tracker
+    ├── scripts/
+    │   └── stop-rule-check.sh  # Stop hook script (used by flow-dev)
     └── rules/
-        ├── always/          # Always-on quality rules (8 files)
-        └── dynamic/         # Project-specific domain rules (starts empty)
+        ├── always/           # Always-on quality rules (8 files)
+        └── dynamic/          # Project-specific domain rules (starts empty)
 ```
 
-Commit `.flow/` to git. Teammates get the rules by cloning.
+Commit `.flow/` and `.claude/agents/` to git. Teammates get everything by cloning.
 
 ## Design Philosophy
 
