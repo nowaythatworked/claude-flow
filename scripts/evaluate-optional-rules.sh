@@ -6,11 +6,10 @@
 set -euo pipefail
 
 # --- Stdin timeout guard ---
-INPUT=""
-if read -t 3 -r INPUT; then
-  while IFS= read -t 1 -r line; do
-    INPUT="${INPUT}${line}"
-  done
+if [ -t 0 ]; then
+  INPUT=""
+else
+  INPUT=$(cat 2>/dev/null) || INPUT=""
 fi
 
 if [ -z "$INPUT" ]; then
@@ -144,6 +143,7 @@ MATCHED_RULES=$(echo "$MATCHED_RULES" | sed '/^$/N;/^\n$/d')
 if command -v jq &>/dev/null; then
   jq -n --arg ctx "$MATCHED_RULES" '{
     hookSpecificOutput: {
+      hookEventName: "UserPromptSubmit",
       additionalContext: $ctx
     }
   }'

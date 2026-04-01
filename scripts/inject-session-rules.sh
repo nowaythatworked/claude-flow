@@ -5,11 +5,10 @@
 set -euo pipefail
 
 # --- Stdin timeout guard (3 seconds) ---
-INPUT=""
-if read -t 3 -r INPUT; then
-  while IFS= read -t 1 -r line; do
-    INPUT="${INPUT}${line}"
-  done
+if [ -t 0 ]; then
+  INPUT=""
+else
+  INPUT=$(cat 2>/dev/null) || INPUT=""
 fi
 
 if [ -z "$INPUT" ]; then
@@ -95,6 +94,7 @@ fi
 if command -v jq &>/dev/null; then
   jq -n --arg ctx "$CONTEXT" '{
     hookSpecificOutput: {
+      hookEventName: "SessionStart",
       additionalContext: $ctx
     }
   }'

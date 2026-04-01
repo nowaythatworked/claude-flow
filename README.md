@@ -135,7 +135,7 @@ Flow creates a focused rule file in the right directory. The rule is immediately
 
 - **No init ceremony beyond `/flow:init`** — one command, done
 - **No lifecycle enforcement** — the workflow adapts to the task, not the other way around
-- **No codebase mapping** — the codebase is the truth, CLAUDE.md has conventions
+- **No codebase mapping** — the codebase is the truth, CLAUDE.md and rules have conventions
 - **In-context over files** — discussion and understanding stay in the context window, not written to intermediate files that agents ignore
 - **Monorepo-aware** — no single project.md trying to describe everything. Domain context is task-scoped.
 - **Rules grow organically** — start with the defaults, add rules as you discover patterns

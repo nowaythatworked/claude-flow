@@ -87,6 +87,7 @@ RULES=$(echo "$RULES" | sed '/^$/N;/^\n$/d')
 if command -v jq &>/dev/null; then
   jq -n --arg ctx "$RULES" '{
     hookSpecificOutput: {
+      hookEventName: "SubagentStart",
       additionalContext: $ctx
     }
   }'
