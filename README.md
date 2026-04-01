@@ -77,6 +77,36 @@ Flow's rules come from analyzing **222 sessions**, **1365 prompts**, and classif
 
 76% of corrections are preventable through auto-injected rules and hooks. Flow encodes these lessons so you don't repeat them.
 
+## The Real Value: Continuous Improvement
+
+The workflow (`/flow:build`) is useful but optional — you use it when you need structure. The rules and hooks are **always active**. This is the real value of flow.
+
+### Every session benefits, not just /flow:build sessions
+
+Even a quick "fix this bug" session without `/flow:build` gets:
+- Always-on rules injected at session start (understand first, reuse code, type safety, TDD)
+- Optional rules evaluated against your prompt (decode pipeline rules load when you mention decode)
+- Every subagent gets rules injected via hooks (no blind agents writing duplicate code)
+- Every file write scanned for `any` types and unsafe assertions
+
+You don't invoke a command to get quality enforcement. It's always there.
+
+### Rules grow with your project
+
+When you discover a mistake pattern — "LLMs keep using raw DB queries instead of ElectroDB entities" — run `/flow:add-rule`. A focused rule file is created, committed to git, and immediately active for the entire team.
+
+Over time, your `.flow/rules/` directory becomes a living knowledge base:
+- **Always-on rules** capture universal quality lessons (shipped defaults + your additions)
+- **Optional rules** capture domain knowledge specific to your project
+
+The more rules you maintain, the fewer corrections you make. The LLM evaluator (Sonnet) ensures agents only get relevant rules — a project with 30 optional rules still keeps agent context lean because only the 2-3 that match the current task are loaded.
+
+### The dev agent learns too
+
+`flow:dev` has persistent project-scoped memory. As it works on your codebase, it accumulates knowledge: "this project uses ElectroDB", "Remix has a double-load quirk on first navigation", "use data-testing-ids not CSS selectors for test locators." This persists across sessions and is shared with the team via git.
+
+The combination of growing rules + learning agents means flow gets better the more you use it — without any manual configuration beyond `/flow:add-rule` when you spot a pattern.
+
 ## Quick Start
 
 ```bash

@@ -43,12 +43,13 @@ This is the adaptive core. Before creating a detailed task list, the orchestrato
 
 ## 5. After /rewind — Resuming Work
 
-When the user rewinds to the plan checkpoint to start the next area:
-- Read `.flow/TASKS.md` to see what's been completed
-- Check `git log --oneline -20` for recent commits to understand what was implemented
-- Do NOT re-research or re-plan areas that are already done
-- Pick up from where the checklist shows incomplete work
-- The user's message after rewind tells you which area to work on next
+After a rewind, you will NOT remember what happened after the checkpoint — the conversation is restored. But the code and files on disk reflect what was actually done. Always reconstruct state:
+
+- Read `.flow/TASKS.md` — this is your source of truth for what's been completed
+- Check `git log --oneline -20` — commits show what was implemented
+- If TASKS.md shows area 1 is done and git confirms the commits, skip it
+- Do NOT re-research or re-plan completed areas
+- The user's message tells you which area to work on next — proceed from step 3
 
 ## 6. Progress & Next
 

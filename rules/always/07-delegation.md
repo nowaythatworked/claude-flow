@@ -1,6 +1,11 @@
 # Delegation — Subagents & Agent Teams
 
-Use agentteam or subagents for implementation work. Keep the orchestrator context clean for reasoning, planning, and verification.
+Use agentteam or subagents for both research AND implementation. Keep the orchestrator context clean for reasoning, planning, and verification — delegate heavy lifting.
+
+When to delegate research/exploration:
+- Codebase exploration that produces verbose output
+- Investigating how existing code works before planning
+- Parallel research into multiple approaches
 
 When to use agentteam (agents can communicate):
 - Multiple agents working on related files that could conflict
