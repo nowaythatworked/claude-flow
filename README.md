@@ -2,13 +2,7 @@
 
 Quality enforcement and adaptive workflow framework for Claude Code. Designed for production monorepos, not greenfield projects.
 
-## Disclaimer
-
-Flow is heavily opinionated. It encodes one developer's workflow patterns, quality standards, and lessons learned from real production work. The always-on rules enforce TDD, strict typing, DRY, and other practices that may not match your team's conventions.
-
-**What's customizable:** The rules. Remove always-on rules you disagree with, add optional rules for your domain. The rules directory is the configuration layer — everything else (the workflow, the hooks, the agents) follows the opinions baked into this plugin.
-
-**What's not customizable (yet):** The workflow structure, hook behavior, agent definitions, and evaluation logic. If the opinionated defaults don't fit your workflow, flow may not be for you — or you're welcome to fork it.
+> **Note:** Flow is heavily opinionated — it encodes my workflow patterns and quality standards from real production work. Currently, rules are the main customization layer. Remove or add rules to fit your project. Everything else follows the opinions baked in.
 
 ## Background
 
