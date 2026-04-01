@@ -7,7 +7,7 @@ hooks:
   Stop:
     - hooks:
         - type: command
-          command: ".flow/scripts/stop-rule-check.sh"
+          command: "${CLAUDE_PLUGIN_ROOT}/scripts/stop-rule-check.sh"
 ---
 
 # Implementation Agent
