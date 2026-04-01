@@ -7,7 +7,7 @@ hooks:
   Stop:
     - hooks:
         - type: command
-          command: ".flow/scripts/stop-rule-check.sh"
+          command: "__FLOW_PLUGIN_ROOT__/scripts/stop-rule-check.sh"
 ---
 
 # Implementation Agent
