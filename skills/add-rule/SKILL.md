@@ -16,14 +16,14 @@ Ask the user what pattern or mistake they want to capture. If the conversation a
 
 Get the core principle in one sentence.
 
-## Step 2 — Classify: always-on or optional
+## Step 2 — Classify: always-on or dynamic
 
 Determine the right category:
 
 - **Always-on** — universal rules that apply to every task regardless of context (e.g., "never commit .env files", "restate understanding before implementing"). These go in `.flow/rules/always/` as native Claude Code rules.
-- **Optional** — domain-specific or situational rules that only matter for certain types of work (e.g., "decode pipeline conventions", "UI accessibility patterns"). These go in `.flow/rules/optional/`.
+- **Optional** — domain-specific or situational rules that only matter for certain types of work (e.g., "decode pipeline conventions", "UI accessibility patterns"). These go in `.flow/rules/dynamic/`.
 
-If unclear, ask the user. Default to optional — it's easier to promote a rule than to demote one.
+If unclear, ask the user. Default to dynamic — it's easier to promote a rule than to demote one.
 
 ## Step 3 — Draft the rule
 

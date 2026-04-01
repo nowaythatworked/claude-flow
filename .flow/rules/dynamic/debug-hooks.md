@@ -3,7 +3,7 @@ description: "Debug rule for verifying hook injection. Should ONLY load when the
 ---
 # Debug Hook Verification
 
-If you see this rule in your context, the optional rule evaluation hook is working.
+If you see this rule in your context, the dynamic rule evaluation hook is working.
 
 Acknowledge by saying exactly: "HOOK DEBUG: Optional rule [debug-hooks.md] was injected by the UserPromptSubmit hook."
 

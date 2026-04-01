@@ -1,7 +1,7 @@
 #!/bin/bash
-# PostToolUse hook: periodically re-evaluate optional rules
+# PostToolUse hook: periodically re-evaluate dynamic rules
 # Debounced — only fires every N tool uses.
-# When it fires, uses claude -p with Sonnet to re-evaluate which optional
+# When it fires, uses claude -p with Sonnet to re-evaluate which dynamic
 # rules are relevant, reading the conversation transcript for full context.
 # Only injects new rules if the selection changed.
 
@@ -38,7 +38,7 @@ if [ -z "$CWD" ]; then
   exit 0
 fi
 
-OPTIONAL_DIR="${CWD}/.flow/rules/optional"
+OPTIONAL_DIR="${CWD}/.flow/rules/dynamic"
 if [ ! -d "$OPTIONAL_DIR" ]; then
   echo '{}'
   exit 0
@@ -115,7 +115,7 @@ if [ -f "$PREV_FILE" ]; then
 fi
 
 # --- Ask Sonnet to re-evaluate ---
-EVAL_PROMPT="You are a rule selector for a coding assistant. Based on the conversation so far, determine which optional quality rules should be active.
+EVAL_PROMPT="You are a rule selector for a coding assistant. Based on the conversation so far, determine which dynamic quality rules should be active.
 
 Available rules:
 $(echo -e "$RULE_CATALOG")
@@ -158,7 +158,7 @@ while IFS= read -r rule_id; do
   if [ -f "$rule_path" ]; then
     CONTENT=$(cat "$rule_path" 2>/dev/null || true)
     if [ -n "$CONTENT" ]; then
-      MATCHED_RULES="${MATCHED_RULES}--- Optional Rule [${rule_id}] (auto-selected) ---
+      MATCHED_RULES="${MATCHED_RULES}--- Dynamic Rule [${rule_id}] (auto-selected) ---
 ${CONTENT}
 
 "
@@ -171,7 +171,7 @@ if [ -z "$MATCHED_RULES" ]; then
   exit 0
 fi
 
-MATCHED_RULES="# Optional Rules Updated (periodic re-evaluation)
+MATCHED_RULES="# Dynamic Rules Updated (periodic re-evaluation)
 Rules were re-evaluated based on your recent activity.
 Follow them. Adjust your approach where needed.
 If you already have a plan, re-evaluate it against these rules and adjust where needed.

@@ -47,9 +47,9 @@ Injected into every session via `SessionStart` hook and into every subagent via 
 
 These are starting points. Delete rules you disagree with, rewrite them to match your team's standards, or add new ones. Each project maintains its own copy in `.flow/rules/always/`.
 
-### Optional Rules (LLM-Evaluated)
+### Dynamic Rules (LLM-Evaluated)
 
-Live in `.flow/rules/optional/`. Each has a `description:` frontmatter. Sonnet evaluates relevance on each substantial prompt and periodically during work (every 15 tool uses, reading the conversation transcript). Only loaded when relevant — a project with 30 optional rules still keeps context lean because only 2-3 matching the current task are loaded.
+Live in `.flow/rules/dynamic/`. Each has a `description:` frontmatter. Sonnet evaluates relevance on each substantial prompt and periodically during work (every 15 tool uses, reading the conversation transcript). Only loaded when relevant — a project with 30 dynamic rules still keeps context lean because only 2-3 matching the current task are loaded.
 
 ### Rules Grow With Your Project
 
@@ -69,7 +69,7 @@ An adaptive loop — not a rigid pipeline. The orchestrator continuously judges:
 Read context, ask questions, discuss. Restate understanding including business context and domain assumptions. The user decides when understanding is sufficient.
 
 ### 2. High-Level Plan
-Search existing codebase for patterns first. Evaluate optional rules. Present major areas — NOT detailed task lists yet. Discuss trade-offs. Create `.flow/TASKS.md` as a scratchpad/checklist. User picks which area to work on.
+Search existing codebase for patterns first. Evaluate dynamic rules. Present major areas — NOT detailed task lists yet. Discuss trade-offs. Create `.flow/TASKS.md` as a scratchpad/checklist. User picks which area to work on.
 
 ### 3. Deep Dive (per area)
 
@@ -108,8 +108,8 @@ Delegate to `flow:dev` agents. Single tasks → foreground subagent. Parallel ta
 |------|------|------|
 | `SessionStart` | Start + compaction | Injects always-on rules, survives context compression |
 | `SubagentStart` | Every agent spawn | Injects quality rules directly into subagent context |
-| `UserPromptSubmit` | Substantial prompts | Sonnet evaluates which optional rules apply |
-| `PostToolUse` | Every 15 tool uses | Re-evaluates optional rules based on transcript |
+| `UserPromptSubmit` | Substantial prompts | Sonnet evaluates which dynamic rules apply |
+| `PostToolUse` | Every 15 tool uses | Re-evaluates dynamic rules based on transcript |
 | `PostToolUse` | After Write/Edit | Scans for `any` types, unsafe assertions, `@ts-ignore` |
 
 ### Custom Agents
@@ -117,7 +117,7 @@ Delegate to `flow:dev` agents. Single tasks → foreground subagent. Parallel ta
 | Agent | Purpose |
 |-------|---------|
 | `flow:dev` | Implementation agent with persistent project memory. Learns codebase patterns across sessions. TDD-first. |
-| `flow:rule-evaluator` | Evaluates which optional rules are relevant. Used by hooks and orchestrator. Sonnet, read-only. |
+| `flow:rule-evaluator` | Evaluates which dynamic rules are relevant. Used by hooks and orchestrator. Sonnet, read-only. |
 
 The `flow:dev` agent accumulates project knowledge across sessions — conventions, patterns, gotchas. This persists via git and is shared with the team.
 
@@ -142,7 +142,7 @@ your-project/
     ├── TASKS.md             # Scratchpad / progress tracker
     └── rules/
         ├── always/          # Always-on quality rules (8 files)
-        └── optional/        # Project-specific domain rules (starts empty)
+        └── dynamic/         # Project-specific domain rules (starts empty)
 ```
 
 Commit `.flow/` to git. Teammates get the rules by cloning.

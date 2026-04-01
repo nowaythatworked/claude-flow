@@ -1,6 +1,6 @@
 ---
 name: init
-description: "Initialize flow in the current project. Scaffolds .flow/ directory with always-on rules and empty optional rules folder."
+description: "Initialize flow in the current project. Scaffolds .flow/ directory with always-on rules and empty dynamic rules folder."
 disable-model-invocation: true
 ---
 
@@ -12,7 +12,7 @@ Set up the flow quality framework in the current project.
 
 1. **Create directories:**
    ```bash
-   !`mkdir -p .flow/rules/always .flow/rules/optional && echo "Created .flow/ directory structure"`
+   !`mkdir -p .flow/rules/always .flow/rules/dynamic && echo "Created .flow/ directory structure"`
    ```
 
 2. **Copy always-on rules** from the plugin:
@@ -28,5 +28,5 @@ Set up the flow quality framework in the current project.
 
 4. **Report what was done.** List the files created/copied. Remind the user to:
    - Commit `.flow/` to git so teammates get the rules
-   - Add project-specific optional rules with `/flow:add-rule` as patterns emerge
-   - `.flow/rules/optional/` is intentionally empty — optional rules are project-specific
+   - Add project-specific dynamic rules with `/flow:add-rule` as patterns emerge
+   - `.flow/rules/dynamic/` is intentionally empty — dynamic rules are project-specific

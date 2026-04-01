@@ -1,5 +1,5 @@
 #!/bin/bash
-# SessionStart hook: inject always-on rules and list available optional rules
+# SessionStart hook: inject always-on rules and list available dynamic rules
 # Runs on startup and compact to ensure rules survive context compaction.
 
 set -euo pipefail
@@ -66,8 +66,8 @@ ${ALWAYS_RULES}"
   fi
 fi
 
-# --- List available optional rules ---
-OPTIONAL_DIR="${CWD}/.flow/rules/optional"
+# --- List available dynamic rules ---
+OPTIONAL_DIR="${CWD}/.flow/rules/dynamic"
 if [ -d "$OPTIONAL_DIR" ]; then
   OPTIONAL_LIST=""
   for f in "$OPTIONAL_DIR"/*.md; do
@@ -78,8 +78,8 @@ if [ -d "$OPTIONAL_DIR" ]; then
 
   if [ -n "$OPTIONAL_LIST" ]; then
     CONTEXT="${CONTEXT}
-# Available Optional Rules
-The following optional rules can be auto-activated based on task context:
+# Available Dynamic Rules
+The following dynamic rules can be auto-activated based on task context:
 ${OPTIONAL_LIST}
 These are selected automatically when your prompt matches relevant keywords."
   fi

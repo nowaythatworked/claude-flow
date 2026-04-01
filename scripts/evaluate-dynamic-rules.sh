@@ -1,7 +1,7 @@
 #!/bin/bash
-# UserPromptSubmit hook: evaluate which optional rules are relevant
+# UserPromptSubmit hook: evaluate which dynamic rules are relevant
 # Uses claude -p (headless) with Haiku to analyze the prompt + transcript
-# and select relevant optional rules.
+# and select relevant dynamic rules.
 
 set -euo pipefail
 
@@ -33,7 +33,7 @@ if [ -z "$CWD" ]; then
   exit 0
 fi
 
-OPTIONAL_DIR="${CWD}/.flow/rules/optional"
+OPTIONAL_DIR="${CWD}/.flow/rules/dynamic"
 if [ ! -d "$OPTIONAL_DIR" ]; then
   echo '{}'
   exit 0
@@ -76,7 +76,7 @@ if [ -n "$TRANSCRIPT" ] && [ -f "$TRANSCRIPT" ]; then
 fi
 
 # --- Ask Haiku to evaluate ---
-EVAL_PROMPT="You are a rule selector for a coding assistant. Given the user's prompt, working directory, and recent conversation context, select which optional quality rules are relevant.
+EVAL_PROMPT="You are a rule selector for a coding assistant. Given the user's prompt, working directory, and recent conversation context, select which dynamic quality rules are relevant.
 
 Available rules:
 $(echo -e "$RULE_CATALOG")
@@ -111,7 +111,7 @@ while IFS= read -r rule_id; do
   if [ -f "$rule_path" ]; then
     CONTENT=$(cat "$rule_path" 2>/dev/null || true)
     if [ -n "$CONTENT" ]; then
-      MATCHED_RULES="${MATCHED_RULES}--- Optional Rule [${rule_id}] (auto-selected) ---
+      MATCHED_RULES="${MATCHED_RULES}--- Dynamic Rule [${rule_id}] (auto-selected) ---
 ${CONTENT}
 
 "
@@ -131,7 +131,7 @@ echo "$SELECTED" > "${CACHE_DIR}/last-selection.json" 2>/dev/null || true
 echo "0" > "${CACHE_DIR}/tool-counter.txt" 2>/dev/null || true
 
 # Add instruction header
-MATCHED_RULES="# Optional Rules (auto-selected for this task)
+MATCHED_RULES="# Dynamic Rules (auto-selected for this task)
 These rules were loaded because they are relevant to your current task context.
 Follow them. Adjust your approach where needed.
 If you already have a plan, re-evaluate it against these rules and adjust where needed.

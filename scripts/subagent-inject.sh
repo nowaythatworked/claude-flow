@@ -1,7 +1,7 @@
 #!/bin/bash
 # SubagentStart hook: inject quality rules into subagent context
-# Reads always-on rules from .flow/rules/always/ and optional rules
-# from .flow/rules/optional/ to give subagents the necessary context.
+# Reads always-on rules from .flow/rules/always/ and dynamic rules
+# from .flow/rules/dynamic/ to give subagents the necessary context.
 
 set -euo pipefail
 
@@ -54,15 +54,15 @@ ${CONTENT}
   done
 fi
 
-# Optional rules from .flow/rules/optional/
-OPTIONAL_DIR="${CWD}/.flow/rules/optional"
+# Dynamic rules from .flow/rules/dynamic/
+OPTIONAL_DIR="${CWD}/.flow/rules/dynamic"
 if [ -d "$OPTIONAL_DIR" ]; then
   for f in "$OPTIONAL_DIR"/*.md; do
     [ -f "$f" ] || continue
     RULE_NAME=$(basename "$f")
     CONTENT=$(cat "$f" 2>/dev/null || true)
     if [ -n "$CONTENT" ]; then
-      RULES="${RULES}--- Optional Rule [${RULE_NAME}] ---
+      RULES="${RULES}--- Dynamic Rule [${RULE_NAME}] ---
 ${CONTENT}
 
 "

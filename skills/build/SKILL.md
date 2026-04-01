@@ -16,7 +16,7 @@ Invoked as `/flow:build <task description>`.
 ## 2. High-Level Plan
 
 - Search existing codebase for patterns, utilities, similar logic FIRST
-- Invoke the `flow:rule-evaluator` agent to evaluate which optional rules apply
+- Invoke the `flow:rule-evaluator` agent to evaluate which dynamic rules apply
 - Present the plan:
   - **Domain understanding** — business context, assumptions about how the system works
   - **Major areas** — NOT detailed task lists yet. Just the big picture breakdown.
@@ -58,7 +58,7 @@ Invoked as `/flow:build <task description>`.
 
 ## Rules
 
-Quality rules are active via hooks (always-on rules injected at session start, optional rules evaluated by flow:rule-evaluator). Follow them. If a rule conflicts with the user's explicit instruction, mention it and follow the user.
+Quality rules are active via hooks (always-on rules injected at session start, dynamic rules evaluated by flow:rule-evaluator). Follow them. If a rule conflicts with the user's explicit instruction, mention it and follow the user.
 
 ## Key Principles
 

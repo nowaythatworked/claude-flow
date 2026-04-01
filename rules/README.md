@@ -7,7 +7,7 @@ Rules are small focused `.md` files — one concern per file, actionable instruc
 ```
 rules/
   always/       Shipped defaults. Copy to your project's .claude/rules/
-  optional/     Domain-specific. Copy to your project's .flow/rules/optional/
+  dynamic/     Domain-specific. Copy to your project's .flow/rules/dynamic/
 ```
 
 ### always/
@@ -26,11 +26,11 @@ Current rules:
 - `07-delegation.md` — use subagents for implementation, keep orchestrator clean
 - `08-verify-work.md` — read before answering, run before claiming
 
-### optional/
+### dynamic/
 
-Domain-specific rules that only apply to certain types of work. These get copied into the project's `.flow/rules/optional/` directory. The `UserPromptSubmit` hook evaluates each prompt and only injects rules whose domain matches the current task.
+Domain-specific rules that only apply to certain types of work. These get copied into the project's `.flow/rules/dynamic/` directory. The `UserPromptSubmit` hook evaluates each prompt and only injects rules whose domain matches the current task.
 
-Optional rules can be longer (up to ~300 tokens each) since they're only loaded when relevant.
+Dynamic rules can be longer (up to ~300 tokens each) since they're only loaded when relevant.
 
 Current rules:
 - `decode-pipeline.md` — logistics email extraction pipeline patterns
@@ -45,7 +45,7 @@ Current rules:
 3. Format: H1 title, then bullet points or short paragraphs
 4. Keep it actionable — what to do, what not to do, why
 
-For always-on rules, use the numbered prefix convention (`09-rule-name.md`) to control load order. For optional rules, use a descriptive name.
+For always-on rules, use the numbered prefix convention (`09-rule-name.md`) to control load order. For dynamic rules, use a descriptive name.
 
 Or just run `/flow:add-rule` during a session — it will ask what you learned and place the rule in the right directory.
 
@@ -56,8 +56,8 @@ Or just run `/flow:add-rule` during a session — it will ask what you learned a
 - No hook overhead — this is a built-in feature
 - Present in every prompt's context
 
-**Optional** (`rules/optional/` -> `.flow/rules/optional/`):
+**Optional** (`rules/dynamic/` -> `.flow/rules/dynamic/`):
 - Evaluated by the `UserPromptSubmit` hook on every prompt
-- Hook reads the prompt, checks against each optional rule's domain
+- Hook reads the prompt, checks against each dynamic rule's domain
 - Only matching rules are injected into context
 - Also injected into subagents via the `SubagentStart` hook
