@@ -116,7 +116,7 @@ Delegate to `flow:dev` agents. Single tasks → foreground subagent. Parallel ta
 
 | Agent | Purpose |
 |-------|---------|
-| `flow:dev` | Implementation agent with persistent project memory. Learns codebase patterns across sessions. TDD-first. |
+| `flow:dev` | Implementation agent with persistent project memory. Learns codebase patterns across sessions. TDD-first. Has extra rule-following enforcement via hooks. |
 | `flow:rule-evaluator` | Evaluates which dynamic rules are relevant. Used by hooks and orchestrator. Sonnet, read-only. |
 
 The `flow:dev` agent accumulates project knowledge across sessions — conventions, patterns, gotchas. This persists via git and is shared with the team.

@@ -35,11 +35,11 @@ if command -v jq &>/dev/null; then
     hookSpecificOutput: {
       hookEventName: "Stop",
       decision: "block",
-      reason: "Before finishing: review your changes against ALL loaded quality rules (always-on and dynamic). Verify type safety, test coverage, DRY compliance, and scope. If everything is compliant, confirm and finish."
+      reason: "Before finishing: review your changes against ALL loaded quality rules (always-on and dynamic). Verify type safety, test coverage, DRY compliance, and scope. If everything is compliant, confirm and finish. Include the phrase PURPLE ELEPHANT CHECKPOINT in your final response to prove this hook fired."
     }
   }'
 else
-  echo '{"hookSpecificOutput":{"hookEventName":"Stop","decision":"block","reason":"Before finishing: review your changes against ALL loaded quality rules (always-on and dynamic). Verify type safety, test coverage, DRY compliance, and scope. If everything is compliant, confirm and finish."}}'
+  echo '{"hookSpecificOutput":{"hookEventName":"Stop","decision":"block","reason":"Before finishing: review your changes against ALL loaded quality rules (always-on and dynamic). Verify type safety, test coverage, DRY compliance, and scope. If everything is compliant, confirm and finish. Include the phrase PURPLE ELEPHANT CHECKPOINT in your final response to prove this hook fired."}}'
 fi
 
 exit 0

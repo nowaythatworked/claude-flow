@@ -1,8 +1,13 @@
 ---
-name: dev
+name: flow-dev
 description: "Implementation agent for flow. Writes code following project quality rules, TDD-first. Use for focused implementation tasks delegated by the orchestrator."
 model: inherit
 memory: project
+hooks:
+  Stop:
+    - hooks:
+        - type: command
+          command: ".flow/scripts/stop-rule-check.sh"
 ---
 
 # Implementation Agent
