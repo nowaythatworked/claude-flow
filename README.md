@@ -2,6 +2,14 @@
 
 Quality enforcement and adaptive workflow framework for Claude Code. Designed for production monorepos, not greenfield projects.
 
+## Disclaimer
+
+Flow is heavily opinionated. It encodes one developer's workflow patterns, quality standards, and lessons learned from real production work. The always-on rules enforce TDD, strict typing, DRY, and other practices that may not match your team's conventions.
+
+**What's customizable:** The rules. Remove always-on rules you disagree with, add optional rules for your domain. The rules directory is the configuration layer — everything else (the workflow, the hooks, the agents) follows the opinions baked into this plugin.
+
+**What's not customizable (yet):** The workflow structure, hook behavior, agent definitions, and evaluation logic. If the opinionated defaults don't fit your workflow, flow may not be for you — or you're welcome to fork it.
+
 ## Background
 
 Flow was born from frustration with existing frameworks (VBW, GSD) on production-grade work. Those frameworks assume greenfield projects — single developer, clean slate, entire codebase fits in a summary file. When applied to a large production monorepo with multiple developers, CI/CD, code review workflows, and complex domain logic, they fell apart:
@@ -205,7 +213,7 @@ After completing an area, the user has two options:
 
 The workflow adapts to task size:
 
-- **Small task** (fix a function, add a parameter): Steps 1-2 happen in one exchange. Step 3: already confident. Step 4: single agent does it all. No TASKS.md, no rewind.
+- **Small task** (fix a function, add a parameter): Steps 1-2 happen in one exchange. Step 3: already confident. Step 4: single agent does it all. No TASKS.md, no rewind. Just tell the Agent to implement all in one go.
 - **Medium task** (implement a feature across a few files): Full loop but all areas done in one session without rewinds.
 - **Large task** (multi-area ticket, system redesign): High-level plan, rewind between areas, TASKS.md as scratchpad, deep dives per area.
 
@@ -246,14 +254,15 @@ Commit `.flow/` to git. Teammates get the rules by cloning your project repo.
 When you discover a recurring pattern mid-session:
 
 ```
-/flow:add-rule LLMs keep using raw DB queries instead of ElectroDB entities
+/flow:add-rule <optional instructions>
 ```
 
+Give instructions or let the agent infer from the conversation.
 Flow creates a focused rule file in the right directory. Immediately active for this project. Committed to git for the team.
 
 ## Design Philosophy
 
-- **In-context over files** — discussion, understanding, and domain knowledge stay in the context window. No writing to intermediate files that agents ignore. This is the #1 lesson from VBW/GSD failure.
+- **In-context over files** — discussion, understanding, and domain knowledge stay in the context window. No writing to intermediate files that agents ignore, learnings get stored in rules which are enforced. This is the #1 lesson from VBW/GSD failure.
 - **Rewind as a workflow tool** — not just error recovery. The plan is a checkpoint. Each implementation area gets a clean context while inheriting all understanding.
 - **No codebase mapping** — the codebase is the truth. CLAUDE.md has conventions. Generated summaries are noise.
 - **No project.md** — a monorepo can't be summarized in one file. Domain context is task-scoped: each plan surfaces only what's relevant.
@@ -261,7 +270,7 @@ Flow creates a focused rule file in the right directory. Immediately active for 
 - **Confidence-gated implementation** — the orchestrator won't implement when uncertain. It researches more or asks. This prevents the #1 correction category (premature implementation).
 - **Rules grow organically** — start with the defaults, add rules as you discover patterns. Every shipped rule traces to a real correction from real sessions.
 - **Hooks for enforcement, not prompts** — prompt instructions get forgotten mid-session. Hooks fire every time. Quality rules are injected mechanically, not relied upon from memory.
-- **Agents learn** — `flow:dev` has persistent project memory. After 10 sessions it knows your codebase conventions, patterns, and gotchas.
+- **Agents learn** — `flow:dev` has persistent project memory. It uses Claude Codes native memory system to store information on a project level.
 
 ## Coming from GSD/VBW?
 
@@ -280,8 +289,6 @@ The core ideas are solid: discuss before implementing, delegate to specialized a
 **Wave-based execution loses human oversight.** GSD's executor groups tasks into waves and runs them in parallel with minimal intervention. This works for independent tasks but falls apart when tasks interact — agents overwrite each other's changes, make conflicting architectural decisions, or silently diverge from the plan. You discover the mess after the wave completes.
 
 **Agent teams get stuck.** VBW's managed agent teams caused "inherit" model errors, cross-session interference, stuck agents requiring force-kill, and config management headaches. The framework spent more time managing agents than doing work.
-
-**Init ceremony wastes time.** Before doing any work: `/gsd:new-project` (questioning, research agents, requirements derivation, roadmap creation), then `/gsd:discuss-phase`, then `/gsd:list-phase-assumptions`, then `/gsd:plan-phase`, then finally `/gsd:execute-phase`. For a focused 2-hour task, this ceremony can take longer than the actual work.
 
 ### How flow handles the same needs
 
