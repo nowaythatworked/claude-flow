@@ -7,16 +7,18 @@ Quality enforcement and adaptive workflow framework for Claude Code. Designed fo
 ## Quick Start
 
 ```bash
-# Install (project-scoped recommended — shared with team via .claude/settings.json)
+# Install plugin (project-scoped — shared with team via .claude/settings.json)
 /plugin marketplace add nowaythatworked/claude-flow
 /plugin install flow@claude-flow --scope project
 
-# Initialize (scaffolds .flow/ with rules)
+# Initialize project (copies rules, agents, scripts)
 /flow:init
 
 # Start working
 /flow:build I want to work on <ticket/task description>
 ```
+
+`/flow:init` scaffolds `.flow/` with rules and scripts, and installs the `flow-dev` agent to `.claude/agents/`. This two-part setup is intentional — the plugin provides hooks and skills (always active via marketplace), while agents live in your project where they have full hook support and are customizable per project.
 
 For development/testing, use `claude --plugin-dir ~/path/to/claude-flow` instead.
 
