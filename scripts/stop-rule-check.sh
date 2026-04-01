@@ -30,20 +30,6 @@ if [ -z "$CWD" ]; then
   exit 0
 fi
 
-# Only activate if flow rules exist in this project
-if [ ! -d "${CWD}/.flow/rules/always" ]; then
-  echo '{}'
-  exit 0
-fi
-
-# Check if there are uncommitted changes (no changes = nothing to check)
-HAS_CHANGES=$(cd "$CWD" && git diff --name-only 2>/dev/null | head -1 || true)
-HAS_STAGED=$(cd "$CWD" && git diff --cached --name-only 2>/dev/null | head -1 || true)
-if [ -z "$HAS_CHANGES" ] && [ -z "$HAS_STAGED" ]; then
-  echo '{}'
-  exit 0
-fi
-
 # --- Flag logic ---
 FLAG_DIR="/tmp/flow-stop-check"
 mkdir -p "$FLAG_DIR" 2>/dev/null || true
