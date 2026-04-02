@@ -8,10 +8,10 @@ Quality enforcement and adaptive workflow framework for Claude Code. Designed fo
 
 ```bash
 # Install plugin (project-scoped — shared with team via .claude/settings.json)
-/plugin marketplace add nowaythatworked/claude-flow
-/plugin install flow@claude-flow --scope project
+claude plugin marketplace add nowaythatworked/claude-flow --scope project
+claude plugin install flow@claude-flow --scope project
 
-# Initialize project (copies rules, agents, scripts)
+# Initialize project (copies rules, agents, scripts — run inside Claude Code)
 /flow:init
 
 # Start working
