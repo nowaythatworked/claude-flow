@@ -96,6 +96,13 @@ setup
 assert_eq "set creates entry" "planning my-task.md" "$("$SCRIPT_DIR/session.sh" "$TEST_DIR" sess-1 --get)"
 assert_eq "get-phase" "planning" "$("$SCRIPT_DIR/session.sh" "$TEST_DIR" sess-1 --get-phase)"
 assert_eq "get-task" "my-task.md" "$("$SCRIPT_DIR/session.sh" "$TEST_DIR" sess-1 --get-task)"
+assert_eq "get-focus default" "[]" "$("$SCRIPT_DIR/session.sh" "$TEST_DIR" sess-1 --get-focus)"
+
+echo "-- JSON format --"
+assert_file_exists "SESSIONS.json created" "$TEST_DIR/.flow/SESSIONS.json"
+JSON=$("$SCRIPT_DIR/session.sh" "$TEST_DIR" sess-1 --get-json)
+assert_contains "json has phase" "planning" "$JSON"
+assert_contains "json has task_file" "my-task.md" "$JSON"
 
 echo "-- multiple sessions --"
 "$SCRIPT_DIR/session.sh" "$TEST_DIR" sess-2 --set implementing other-task.md
@@ -104,9 +111,33 @@ assert_eq "sess-2 implementing" "implementing" "$("$SCRIPT_DIR/session.sh" "$TES
 assert_eq "sess-2 task" "other-task.md" "$("$SCRIPT_DIR/session.sh" "$TEST_DIR" sess-2 --get-task)"
 
 echo "-- set-phase --"
-"$SCRIPT_DIR/session.sh" "$TEST_DIR" sess-1 --set-phase implementing
-assert_eq "phase updated" "implementing" "$("$SCRIPT_DIR/session.sh" "$TEST_DIR" sess-1 --get-phase)"
+"$SCRIPT_DIR/session.sh" "$TEST_DIR" sess-1 --set-phase planned
+assert_eq "phase updated" "planned" "$("$SCRIPT_DIR/session.sh" "$TEST_DIR" sess-1 --get-phase)"
 assert_eq "task unchanged" "my-task.md" "$("$SCRIPT_DIR/session.sh" "$TEST_DIR" sess-1 --get-task)"
+
+echo "-- focus --"
+"$SCRIPT_DIR/session.sh" "$TEST_DIR" sess-1 --set-focus "Auth Middleware" "Rate Limiting"
+FOCUS=$("$SCRIPT_DIR/session.sh" "$TEST_DIR" sess-1 --get-focus)
+assert_contains "focus has first item" "Auth Middleware" "$FOCUS"
+assert_contains "focus has second item" "Rate Limiting" "$FOCUS"
+
+"$SCRIPT_DIR/session.sh" "$TEST_DIR" sess-1 --clear-focus
+assert_eq "focus cleared" "[]" "$("$SCRIPT_DIR/session.sh" "$TEST_DIR" sess-1 --get-focus)"
+
+echo "-- parent --"
+"$SCRIPT_DIR/session.sh" "$TEST_DIR" sess-2 --set-parent sess-1
+JSON=$("$SCRIPT_DIR/session.sh" "$TEST_DIR" sess-2 --get-json)
+assert_contains "parent set" "sess-1" "$JSON"
+
+echo "-- dump --"
+DUMP=$("$SCRIPT_DIR/session.sh" "$TEST_DIR" --dump)
+assert_contains "dump has sess-1" "sess-1" "$DUMP"
+assert_contains "dump has sess-2" "sess-2" "$DUMP"
+
+echo "-- list --"
+LIST=$("$SCRIPT_DIR/session.sh" "$TEST_DIR" --list)
+assert_contains "list has sess-1" "sess-1" "$LIST"
+assert_contains "list has sess-2" "sess-2" "$LIST"
 
 echo "-- remove --"
 "$SCRIPT_DIR/session.sh" "$TEST_DIR" sess-1 --remove
@@ -115,7 +146,7 @@ assert_eq "sess-2 still exists" "implementing" "$("$SCRIPT_DIR/session.sh" "$TES
 
 echo "-- remove last entry cleans file --"
 "$SCRIPT_DIR/session.sh" "$TEST_DIR" sess-2 --remove
-assert_file_not_exists "SESSIONS removed when empty" "$TEST_DIR/.flow/SESSIONS"
+assert_file_not_exists "SESSIONS.json removed when empty" "$TEST_DIR/.flow/SESSIONS.json"
 
 echo "-- get on nonexistent --"
 assert_empty "get on missing session" "$("$SCRIPT_DIR/session.sh" "$TEST_DIR" sess-99 --get)"
@@ -125,10 +156,10 @@ echo ""
 echo "=== phase-gate.sh ==="
 # ============================================================
 
-echo "-- no SESSIONS file --"
+echo "-- no SESSIONS.json file --"
 setup
 RESULT=$(echo '{"cwd":"'"$TEST_DIR"'","session_id":"s1","prompt":"hi"}' | "$SCRIPT_DIR/phase-gate.sh")
-assert_json_empty "no SESSIONS = silent" "$RESULT"
+assert_json_empty "no SESSIONS.json = silent" "$RESULT"
 
 echo "-- unregistered session --"
 "$SCRIPT_DIR/session.sh" "$TEST_DIR" other-sess --set planning task.md
@@ -139,13 +170,25 @@ echo "-- planning session --"
 "$SCRIPT_DIR/session.sh" "$TEST_DIR" s1 --set planning task.md
 RESULT=$(echo '{"cwd":"'"$TEST_DIR"'","session_id":"s1","prompt":"hi"}' | "$SCRIPT_DIR/phase-gate.sh")
 assert_contains "planning reminder" "planning" "$RESULT"
-assert_contains "mentions steps 1-4" "steps 1-4" "$RESULT"
+assert_contains "mentions approve" "approve" "$RESULT"
+
+echo "-- planned session (no focus) --"
+"$SCRIPT_DIR/session.sh" "$TEST_DIR" s1 --set-phase planned
+RESULT=$(echo '{"cwd":"'"$TEST_DIR"'","session_id":"s1","prompt":"hi"}' | "$SCRIPT_DIR/phase-gate.sh")
+assert_contains "planned reminder" "planned" "$RESULT"
+assert_contains "mentions next" "next" "$RESULT"
+
+echo "-- planned session (with focus) --"
+"$SCRIPT_DIR/session.sh" "$TEST_DIR" s1 --set-focus "Auth Middleware"
+RESULT=$(echo '{"cwd":"'"$TEST_DIR"'","session_id":"s1","prompt":"hi"}' | "$SCRIPT_DIR/phase-gate.sh")
+assert_contains "focus in reminder" "Auth Middleware" "$RESULT"
+assert_contains "mentions implement" "implement" "$RESULT"
 
 echo "-- implementing session --"
 "$SCRIPT_DIR/session.sh" "$TEST_DIR" s1 --set-phase implementing
 RESULT=$(echo '{"cwd":"'"$TEST_DIR"'","session_id":"s1","prompt":"hi"}' | "$SCRIPT_DIR/phase-gate.sh")
 assert_contains "implementing reminder" "implementing" "$RESULT"
-assert_contains "mentions steps 5-6" "steps 5-6" "$RESULT"
+assert_contains "mentions next" "next" "$RESULT"
 
 # ============================================================
 echo ""
@@ -156,9 +199,15 @@ echo "-- planning: write outside .flow/ --"
 setup
 "$SCRIPT_DIR/session.sh" "$TEST_DIR" s1 --set planning task.md
 RESULT=$(echo '{"cwd":"'"$TEST_DIR"'","session_id":"s1","tool_input":{"file_path":"'"$TEST_DIR"'/src/app.ts"}}' | "$SCRIPT_DIR/phase-guard.sh")
-assert_contains "warns on code write" "planning" "$RESULT"
+assert_contains "warns on code write (planning)" "planning" "$RESULT"
+
+echo "-- planned: write outside .flow/ --"
+"$SCRIPT_DIR/session.sh" "$TEST_DIR" s1 --set-phase planned
+RESULT=$(echo '{"cwd":"'"$TEST_DIR"'","session_id":"s1","tool_input":{"file_path":"'"$TEST_DIR"'/src/app.ts"}}' | "$SCRIPT_DIR/phase-guard.sh")
+assert_contains "warns on code write (planned)" "planned" "$RESULT"
 
 echo "-- planning: write inside .flow/ --"
+"$SCRIPT_DIR/session.sh" "$TEST_DIR" s1 --set-phase planning
 RESULT=$(echo '{"cwd":"'"$TEST_DIR"'","session_id":"s1","tool_input":{"file_path":"'"$TEST_DIR"'/.flow/task.md"}}' | "$SCRIPT_DIR/phase-guard.sh")
 assert_json_empty ".flow/ writes allowed" "$RESULT"
 
@@ -193,7 +242,11 @@ assert_json_empty "already registered = skip" "$RESULT"
 
 echo "-- resume: branch from build session (single task) --"
 RESULT=$(echo '{"source":"resume","cwd":"'"$TEST_DIR"'","session_id":"branched","transcript_path":"'"$TRANSCRIPT"'"}' | "$SCRIPT_DIR/branch-detect.sh")
-assert_eq "auto-registered" "planning task.md" "$("$SCRIPT_DIR/session.sh" "$TEST_DIR" branched --get)"
+assert_eq "auto-registered phase" "planning" "$("$SCRIPT_DIR/session.sh" "$TEST_DIR" branched --get-phase)"
+assert_eq "auto-registered task" "task.md" "$("$SCRIPT_DIR/session.sh" "$TEST_DIR" branched --get-task)"
+# Check parent was set
+BRANCH_JSON=$("$SCRIPT_DIR/session.sh" "$TEST_DIR" branched --get-json)
+assert_contains "parent set" "parent" "$BRANCH_JSON"
 
 echo "-- resume: non-build transcript --"
 "$SCRIPT_DIR/session.sh" "$TEST_DIR" branched --remove
@@ -209,14 +262,13 @@ echo '{"role":"user","content":"session parent flow:build"}' > "$TRANSCRIPT"
 RESULT=$(echo '{"source":"resume","cwd":"'"$TEST_DIR"'","session_id":"branched2","transcript_path":"'"$TRANSCRIPT"'"}' | "$SCRIPT_DIR/branch-detect.sh")
 PHASE=$("$SCRIPT_DIR/session.sh" "$TEST_DIR" branched2 --get-phase)
 TASK=$("$SCRIPT_DIR/session.sh" "$TEST_DIR" branched2 --get-task)
-# Should match one of the parents — the one whose ID is in the transcript
 assert_eq "matched parent session" "planning" "$PHASE"
 assert_eq "matched parent task" "task.md" "$TASK"
 
-echo "-- resume: no SESSIONS file --"
+echo "-- resume: no SESSIONS.json file --"
 setup
 RESULT=$(echo '{"source":"resume","cwd":"'"$TEST_DIR"'","session_id":"orphan","transcript_path":"'"$TRANSCRIPT"'"}' | "$SCRIPT_DIR/branch-detect.sh")
-assert_json_empty "no SESSIONS = skip" "$RESULT"
+assert_json_empty "no SESSIONS.json = skip" "$RESULT"
 
 rm -f "$TRANSCRIPT"
 
