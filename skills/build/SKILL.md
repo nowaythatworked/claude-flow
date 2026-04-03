@@ -5,65 +5,91 @@ description: "Structured workflow for complex tasks. Adaptive understand → pla
 
 Invoked as `/flow:build <task description>`.
 
-## 1. Understand the Big Picture
+## 0. Initialize
 
-- Read all referenced files, tickets, pasted context
-- Read related code broadly — not just the files mentioned
-- Ask clarifying questions — open-ended, not formulaic
-- Restate understanding: business context, who is affected, assumptions about business logic
-- Do NOT proceed until the user signals readiness
+1. Pick a meaningful task filename (see naming below)
+2. Register session: `"${CLAUDE_PLUGIN_ROOT}/scripts/session.sh" . "${CLAUDE_SESSION_ID}" --set planning <task-filename>.md`
 
-## 2. High-Level Plan
+### Task file naming
 
-- Search existing codebase for patterns, utilities, similar logic FIRST
+Derive a short, descriptive, kebab-case filename from context:
+- Ticket ID if available: `PROJ-123-auth-refactor.md`
+- Branch name or task summary otherwise: `ariadne-pr-cleanup.md`, `fix-stryker-pipeline.md`
+
+This file is referenced below as "the task file." Find it via: `"${CLAUDE_PLUGIN_ROOT}/scripts/session.sh" . "${CLAUDE_SESSION_ID}" --get-task`
+
+## Planning phase (steps 1–4)
+
+During planning, the hook system reminds you to stay in this phase. No code changes outside `.flow/` until the user runs `/flow:approve`.
+
+### 1. Understand
+
+- Read referenced files, tickets, context — and related code broadly
+- Ask clarifying questions
+- Restate understanding: business context, who is affected, assumptions
+- Do NOT move to planning until the user signals readiness
+
+### 2. High-Level Plan
+
+- Search codebase for existing patterns and utilities FIRST
 - Invoke the `flow:rule-evaluator` agent to evaluate which dynamic rules apply
-- Present the plan:
-  - **Domain understanding** — business context, assumptions about how the system works
-  - **Major areas** — NOT detailed task lists yet. Just the big picture breakdown.
+- Present the plan: domain understanding + major areas (NOT detailed task lists)
 - Discuss trade-offs, let user adjust
-- Create/update `.flow/TASKS.md` with the high-level plan as a checklist
+- Write the high-level plan to the task file as a checklist
 - User picks which area to work on first
 
-## 3. Deep Dive (per selected area)
+### 3. Deep Dive (per selected area)
 
-**First: Orient.** Before anything else:
-- Read `.flow/TASKS.md` to understand what's already been completed
-- Check `git log --oneline -20` for recent commits
-- Check for any notes from previous areas that may be relevant
-- This establishes the current state regardless of how you got here (new area, rewind, resume, etc.)
+**Orient** — read the task file + `git log --oneline -20` + notes from previous areas.
 
-**Then: Judge confidence.** "Do I have everything I need to implement this confidently, respecting all loaded rules?"
+**Judge confidence** — "Do I have everything I need to implement this confidently?"
+- Not confident → research more (delegate to subagents for verbose exploration), ask questions
+- Confident → create detailed task list for THIS AREA ONLY in the task file
 
-- If NOT confident: research more (use subagents to explore code), ask the user questions. This is not a failure — it's thoroughness.
-- If confident: create a detailed task list for THIS AREA ONLY in `.flow/TASKS.md` (nested under the high-level item)
-- The user can override this judgment: "good enough, implement" or "go deeper"
+Note important discoveries in the task file — things that affect other areas and would be lost after a rewind.
 
-**Note important discoveries.** If something comes up that could affect other areas — a codebase quirk, an unexpected constraint, a domain insight — jot it down in `.flow/TASKS.md`. Don't document everything. Just the stuff thats important for other sub-tasks, which you'd forget after a rewind and wish you hadn't.
+### 4. Present & Wait
 
-## 4. Implement (per detailed task)
+- Present the finalized plan for this area
+- **Do NOT implement. Do NOT ask if the user wants to start.**
+- The user will run `/flow:approve` when ready
 
-- Delegate to `flow:dev` agents (subagent for single tasks, agentteam for parallel work)
-- Delegation instructions per work mode:
-  - **Foreground subagent**: "When encountering ambiguity that cannot be resolved by reading the codebase, use AskUserQuestion to raise it."
-  - **Agentteam workers**: "When encountering ambiguity that cannot be resolved by reading the codebase, communicate it back to the orchestrator and wait for a response."
-- After each task: verify work, run tests, update `.flow/TASKS.md`, ensure implementation is compliant with the loaded rules
+## Implementation phase (steps 5–6)
 
-## 5. Progress & Next
+After `/flow:approve`, implementation is unlocked. The user can run `/flow:lock` at any time to return to planning.
 
-- After completing an area: update `.flow/TASKS.md`, mark items done
+### 5. Implement
+
+**Delegation guideline:** Delegate work to `flow:dev` agents when it involves substantial code changes — multiple files, complex logic, anything that benefits from a focused context. The orchestrator handles coordination, verification, and quick operations where spawning an agent would cost more overhead than doing it directly (a single shell command, a small config edit, a merge).
+
+- **Foreground subagent** (single focused task): "When encountering ambiguity that cannot be resolved by reading the codebase, use AskUserQuestion to raise it."
+- **Agentteam** (parallel independent tasks): "When encountering ambiguity, communicate it back to the orchestrator and wait."
+- After each task: verify work, run tests, update the task file
+
+### 6. Progress & Next
+
+- Update the task file, mark items done
 - Present: "Here's what's done, here's what's next"
-- User picks next area → back to step 3
-- User may `/rewind` to plan checkpoint, edit their message to specify the next area
-- User uses `/fork` to create named checkpoints for easy session resumption later
+- User picks next area → `/flow:lock` → back to step 3
+- User may `/rewind` for a clean context, `/fork` for named checkpoints
+
+## Commands
+
+| Command | Effect |
+|---------|--------|
+| `/flow:approve` | Unlock implementation |
+| `/flow:lock` | Return to planning |
+| `/flow:phase` | Show current phase |
+| `/flow:reset` | Archive task file and reset |
 
 ## Rules
 
-Quality rules are active via hooks (always-on rules injected at session start, dynamic rules evaluated by flow:rule-evaluator). Follow them. If a rule conflicts with the user's explicit instruction, mention it and follow the user.
+Quality rules are loaded via hooks (always-on at session start, dynamic per-task). Follow them. If a rule conflicts with the user's explicit instruction, mention it and follow the user.
 
-## Key Principles
+## Principles
 
-- NEVER plan all details upfront — plan the big picture, then deep dive per area
-- NEVER implement when not confident — research more, ask questions
-- NEVER create detailed task lists for areas not being worked on yet
-- The `.flow/TASKS.md` file is the living progress tracker — always keep it updated
-- The orchestrator's job is reasoning, planning, and verification — delegate implementation, research & heavy planning
+- Plan the big picture first, then deep dive per area — never plan all details upfront
+- Never implement without `/flow:approve` — user feedback on the plan is NOT approval
+- Never create detailed task lists for areas not being worked on yet
+- Research more or ask when not confident — thoroughness over speed
+- Keep the task file updated — it's the living progress tracker

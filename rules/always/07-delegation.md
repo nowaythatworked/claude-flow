@@ -1,24 +1,29 @@
 # Delegation — Subagents & Agent Teams
 
-Use agentteam or subagents for both research AND implementation. Keep the orchestrator context clean for reasoning, planning, and verification — delegate heavy lifting.
+Delegate work that benefits from a focused context or parallelism. Keep the orchestrator context clean for reasoning, planning, and verification.
 
-When to delegate research/exploration:
+## When to delegate
+
+- Substantial code changes — multiple files, complex logic
 - Codebase exploration that produces verbose output
-- Investigating how existing code works before planning
-- Parallel research into multiple approaches
+- Parallel independent tasks
+- Anything where a focused agent context is more effective than the orchestrator's broad context
 
-When to use agentteam (agents can communicate):
-- Multiple agents working on related files that could conflict
-- Agents that should cross-check each other's work
-- Coordinated multi-file changes
+## When the orchestrator can do it directly
 
-When to use subagents (independent parallel work):
-- Independent tasks with no cross-dependencies
-- Focused single-file or single-concern work
+- Quick operations where spawning an agent costs more than doing it: a single shell command, a small config edit, a git merge
+- Simple verification (running a test, checking a build)
+- Updating the task file or .flow/ state
 
-For ALL delegated agents:
-- Pass the relevant quality rules and project context
+## Subagents vs agentteam
+
+- **Subagents** — independent tasks, no cross-dependencies, focused single-concern work
+- **Agentteam** — related files that could conflict, agents that should coordinate or cross-check
+
+## For all delegated agents
+
 - Be specific about what to implement — don't give vague instructions
+- Pass relevant quality rules and project context
 - Instruct them to search for existing patterns before writing new code
 - Instruct them to write tests (TDD)
 - Verify their work after completion — don't trust blindly

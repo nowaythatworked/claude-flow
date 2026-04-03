@@ -71,11 +71,11 @@ An adaptive loop — not a rigid pipeline. The orchestrator continuously judges:
 Read context, ask questions, discuss. Restate understanding including business context and domain assumptions. The user decides when understanding is sufficient.
 
 ### 2. High-Level Plan
-Search existing codebase for patterns first. Evaluate dynamic rules. Present major areas — NOT detailed task lists yet. Discuss trade-offs. Create `.flow/TASKS.md` as a scratchpad/checklist. User picks which area to work on.
+Search existing codebase for patterns first. Evaluate dynamic rules. Present major areas — NOT detailed task lists yet. Discuss trade-offs. Create the task file as a scratchpad/checklist. User picks which area to work on.
 
 ### 3. Deep Dive (per area)
 
-**Orient:** Read `.flow/TASKS.md` and `git log` to understand current state — what's done, what's in progress, any notes from previous areas.
+**Orient:** Read the task file and `git log` to understand current state — what's done, what's in progress, any notes from previous areas.
 
 **Judge confidence:** *"Do I have everything I need to implement this confidently, respecting all loaded rules?"*
 
@@ -83,24 +83,24 @@ Search existing codebase for patterns first. Evaluate dynamic rules. Present maj
 - **Confident?** Create a detailed task list for THIS area only.
 - The user can override: *"good enough, implement"* or *"go deeper."*
 
-Note important discoveries in `.flow/TASKS.md` that could affect other areas.
+Note important discoveries in the task file that could affect other areas.
 
 ### 4. Implement
-Delegate to `flow:dev` agents. Single tasks → foreground subagent. Parallel tasks → agentteam. Ensure implementation complies with loaded rules. After each task: verify, test, update `.flow/TASKS.md`.
+Delegate to `flow:dev` agents. Single tasks → foreground subagent. Parallel tasks → agentteam. Ensure implementation complies with loaded rules. After each task: verify, test, update the task file.
 
 ### 5. Next Area
 
 **Continue in the same context** if it's not bloated — orchestrator presents progress, user picks next area, back to step 3.
 
-**Rewind for a clean context** on larger tasks — run `/rewind`, select the message where you chose the first area, edit it to the next area. The orchestrator gets a clean context with the full discussion and plan intact, orients via TASKS.md + git log, and deep dives the new area.
+**Rewind for a clean context** on larger tasks — run `/rewind`, select the message where you chose the first area, edit it to the next area. The orchestrator gets a clean context with the full discussion and plan intact, orients via task file + git log, and deep dives the new area.
 
 **Fork before risky changes** — `/fork before-refactor` saves the current state. Resume the fork if things go wrong. Also useful for exploring alternative approaches or creating resume points for future sessions.
 
 ### Scaling
 
-- **Small task** (one function, a few files): Steps 1-2 in one exchange. Already confident. Single agent implements everything. No TASKS.md, no rewind.
+- **Small task** (one function, a few files): Steps 1-2 in one exchange. Already confident. Single agent implements everything. No task file, no rewind.
 - **Medium task** (feature across a few files): Full loop, all areas in one session without rewinds.
-- **Large task** (multi-area ticket, redesign): High-level plan, rewind between areas, TASKS.md as scratchpad, deep dives per area.
+- **Large task** (multi-area ticket, redesign): High-level plan, rewind between areas, task file as scratchpad, deep dives per area.
 
 ## Technical Details
 
@@ -109,10 +109,13 @@ Delegate to `flow:dev` agents. Single tasks → foreground subagent. Parallel ta
 | Hook | When | What |
 |------|------|------|
 | `SessionStart` | Start + compaction | Injects always-on rules, survives context compression |
+| `SessionStart` | Resume (branch) | Auto-detects branched `/flow:build` sessions, registers new session |
 | `SubagentStart` | Every agent spawn | Injects quality rules directly into subagent context |
+| `UserPromptSubmit` | Every prompt | Phase enforcement reminder (only for registered `/flow:build` sessions) |
 | `UserPromptSubmit` | Substantial prompts | Sonnet evaluates which dynamic rules apply |
-| `PostToolUse` | Every 15 tool uses | Re-evaluates dynamic rules based on transcript |
+| `PostToolUse` | After Write/Edit | Phase guard: warns on code writes during planning mode |
 | `PostToolUse` | After Write/Edit | Scans for `any` types, unsafe assertions, `@ts-ignore` |
+| `PostToolUse` | Every 15 tool uses | Re-evaluates dynamic rules based on transcript |
 
 ### Custom Agents
 
@@ -132,6 +135,10 @@ Delegate to `flow:dev` agents. Single tasks → foreground subagent. Parallel ta
 |---------|------|
 | `/flow:build <task>` | Adaptive workflow for complex tasks |
 | `/flow:init` | Initialize flow in current project (scaffold .flow/) |
+| `/flow:approve` | Approve the plan, unlock implementation |
+| `/flow:lock` | Return to planning mode |
+| `/flow:phase` | Show current workflow phase |
+| `/flow:reset` | Archive task file and reset phase |
 | `/flow:add-rule` | Add a new rule from a pattern you discovered |
 | `/flow:rules` | Show all active rules and their status |
 
@@ -146,9 +153,9 @@ your-project/
 │   │   └── flow-dev.md      # Implementation agent (with Stop hook)
 │   └── rules/               # Team's native Claude Code rules (untouched)
 └── .flow/
-    ├── TASKS.md              # Scratchpad / progress tracker
-    ├── scripts/
-    │   └── stop-rule-check.sh  # Stop hook script (used by flow-dev)
+    ├── SESSIONS              # Active session state (phase + task per session)
+    ├── <task-name>.md        # Task file (named by context, e.g. fix-auth-bug.md)
+    ├── archive/              # Archived task files from completed work
     └── rules/
         ├── always/           # Always-on quality rules (8 files)
         └── dynamic/          # Project-specific domain rules (starts empty)
@@ -191,9 +198,9 @@ Discuss before implementing, delegate to agents, verify work, track progress, su
 |---------|------|-----|
 | `map-codebase` → project.md | No mapping | Monorepos can't be summarized |
 | `discuss-phase` (formulaic) | Open-ended discussion | User decides when sufficient |
-| `plan-phase` → PLAN.md | In-context plan + TASKS.md scratchpad | Plan preserved through /rewind |
+| `plan-phase` → PLAN.md | In-context plan + task file | Plan preserved through /rewind |
 | `execute-phase` (waves) | Delegated with user in the loop | No silent divergence |
-| `.planning/` (6+ files/phase) | `.flow/TASKS.md` + conversation | One scratchpad, not a state machine |
+| `.planning/` (6+ files/phase) | `.flow/SESSIONS` + task file + conversation | Minimal state, not a state machine |
 | Framework-managed agents | Natural delegation | No lifecycle management overhead |
 
 ### The key insight

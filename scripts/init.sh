@@ -79,13 +79,17 @@ else
   echo "Agents: $installed installed, $skipped already existed"
 fi
 
-# --- 4. Create TASKS.md ---
-if [ ! -f "$CWD/.flow/TASKS.md" ]; then
-  printf "# Tasks\n\n_No active tasks yet. Use /flow:build to start._\n" > "$CWD/.flow/TASKS.md"
-  echo "Created .flow/TASKS.md"
-else
-  echo ".flow/TASKS.md already exists"
-fi
+# --- 4. Create archive directory ---
+mkdir -p "$CWD/.flow/archive"
+
+# --- 5. Clean up stale state files ---
+# SESSIONS is managed by /flow:build, not by init.
+for f in SESSIONS PHASE ACTIVE_TASK; do
+  if [ -f "$CWD/.flow/$f" ]; then
+    rm "$CWD/.flow/$f"
+    echo "Removed stale .flow/$f"
+  fi
+done
 
 echo ""
 echo "Init complete. Commit .flow/ and .claude/agents/ to share with your team."

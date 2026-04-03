@@ -16,6 +16,15 @@
         "hooks": [
           {
             "type": "command",
+            "command": "${CLAUDE_PLUGIN_ROOT}/scripts/phase-gate.sh",
+            "timeout": 5
+          }
+        ]
+      },
+      {
+        "hooks": [
+          {
+            "type": "command",
             "command": "${CLAUDE_PLUGIN_ROOT}/scripts/evaluate-dynamic-rules.sh",
             "timeout": 60
           }
@@ -23,6 +32,16 @@
       }
     ],
     "PostToolUse": [
+      {
+        "matcher": "Write|Edit",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "${CLAUDE_PLUGIN_ROOT}/scripts/phase-guard.sh",
+            "timeout": 5
+          }
+        ]
+      },
       {
         "matcher": "Write|Edit",
         "hooks": [
@@ -44,6 +63,15 @@
       }
     ],
     "SessionStart": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "${CLAUDE_PLUGIN_ROOT}/scripts/branch-detect.sh",
+            "timeout": 30
+          }
+        ]
+      },
       {
         "hooks": [
           {
