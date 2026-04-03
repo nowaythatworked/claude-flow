@@ -25,7 +25,7 @@ Invoked as `/flow:reset [flags]`.
 
 3. Run the reset script:
    ```bash
-   "${CLAUDE_PLUGIN_ROOT}/scripts/reset.sh" [--archive|--delete|--phase-only] --session "${CLAUDE_SESSION_ID}"
+   "${CLAUDE_PLUGIN_ROOT}/scripts/reset.sh" [--archive|--delete|--phase-only] --session "${CLAUDE_SESSION_ID}" .
    ```
 
 4. Report what was done.

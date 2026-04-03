@@ -1,6 +1,6 @@
 ---
 name: phase
-description: "Show the current workflow phase (planning or implementing). Auto-detects branched sessions."
+description: "Show the current workflow phase, focus, and available commands. Auto-detects branched sessions."
 ---
 
 Invoked as `/flow:phase`.
@@ -9,9 +9,16 @@ Invoked as `/flow:phase`.
 
 1. Get state: `"${CLAUDE_PLUGIN_ROOT}/scripts/session.sh" . "${CLAUDE_SESSION_ID}" --get`
 
-2. **If registered**, report the phase and task file:
-   - `planning` — "Planning mode. Discussing and refining the plan. No implementation until `/flow:approve`."
-   - `implementing` — "Implementation mode. Plan approved. Delegating code changes to subagents."
+2. **If registered**, get details and report:
+   - Phase: `"${CLAUDE_PLUGIN_ROOT}/scripts/session.sh" . "${CLAUDE_SESSION_ID}" --get-phase`
+   - Focus: `"${CLAUDE_PLUGIN_ROOT}/scripts/session.sh" . "${CLAUDE_SESSION_ID}" --get-focus`
+   - Task file: `"${CLAUDE_PLUGIN_ROOT}/scripts/session.sh" . "${CLAUDE_SESSION_ID}" --get-task`
+
+   Report based on phase:
+   - `planning` — "**Planning.** Discussing and refining the plan in conversation. → `/flow:approve` when ready."
+   - `planned` (no focus) — "**Planned.** Plan written to `<file>`. → `/flow:next` to pick tasks."
+   - `planned` (with focus) — "**Planned | Focus: [tasks].** Deep-diving. → `/flow:implement` when ready."
+   - `implementing` (with focus) — "**Implementing: [tasks].** Code writes unlocked. → `/flow:next` when done."
 
 3. **If NOT registered**, attempt self-heal:
 
@@ -26,6 +33,6 @@ Invoked as `/flow:phase`.
         - If confirmed → report the phase.
         - If denied → remove the entry: `"${CLAUDE_PLUGIN_ROOT}/scripts/session.sh" . "${CLAUDE_SESSION_ID}" --remove` and continue to (c).
 
-   c. If still not registered — list all task files from `.flow/SESSIONS` and any `.md` files in `.flow/` (excluding rules, archive). Use `AskUserQuestion` to ask the user which task they are working on and which phase they are in. Register with their answer.
+   c. If still not registered — list all task files from SESSIONS.json (`"${CLAUDE_PLUGIN_ROOT}/scripts/session.sh" . --dump`) and any `.md` files in `.flow/` (excluding rules, archive). Use `AskUserQuestion` to ask the user which task they are working on and which phase they are in. Register with their answer.
 
-4. If no `.flow/SESSIONS` exists and no task files found, say: "No active workflow. Use `/flow:build` to start."
+4. If no SESSIONS.json exists and no task files found, say: "No active workflow. Use `/flow:build` to start."
