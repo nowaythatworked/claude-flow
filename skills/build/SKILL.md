@@ -78,7 +78,7 @@ After `/flow:approve`, the plan is written to the task file. Use `/flow:next` to
 
 - The plan exists in the task file — refer to it, don't rewrite it
 - Use `/flow:next` for structured task selection and deep-dive, or respond directly if the user tells you what to work on
-- If the user picks tasks directly: set focus via `"${CLAUDE_PLUGIN_ROOT}/scripts/session.sh" . "${CLAUDE_SESSION_ID}" --set-focus "<task>"` and deep-dive following the `/flow:next` deep-dive rules (pseudo-implementation, pre-plan types/schemas, trace impact)
+- If the user picks tasks directly: ensure phase is `planned` first (if currently `implementing`, run `--clear-focus` then `--set-phase planned`), then set focus via `"${CLAUDE_PLUGIN_ROOT}/scripts/session.sh" . "${CLAUDE_SESSION_ID}" --set-focus "<task>"` and deep-dive following the `/flow:next` deep-dive rules (pseudo-implementation, pre-plan types/schemas, trace impact)
 - Still no code changes — deep-dive is analysis, not implementation
 - Suggest to the user: "Run `/flow:next` to pick tasks, or just tell me what to focus on."
 
