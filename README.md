@@ -72,9 +72,12 @@ Rules are injected at session start and re-evaluated throughout the conversation
 A structured loop with explicit user gates — plan in conversation, approve to commit, deep-dive before implementing.
 
 ```
-/flow:build → planning ──(/flow:approve)──→ planned ──(/flow:next)──→ planned ──(/flow:implement)──→ implementing
-                 ↑                            ↑        (deep-dive)      (focus set)                       │
-                 └────(/flow:lock)────────────┴─────────────────────────(/flow:lock)──────────────────────┘
+/flow:build → planning ──(/flow:approve)──→ planned ──(/flow:implement)──→ implementing
+                 ↑                            ↑                               │
+                 └────(/flow:lock)────────────┴─────────(/flow:lock)──────────┘
+                                                 │
+                                          /flow:next (optional)
+                                          pick tasks, deep-dive
 ```
 
 ### Phase 1: Planning (conversation only)
@@ -96,10 +99,9 @@ The user runs `/flow:approve` to lock in the plan. The plan gets written to a ta
 
 The plan exists in the task file. Now pick tasks and deep-dive before implementing.
 
-1. **`/flow:next`** — Analyze what's done, what's remaining, what other sessions are working on. Assess task sizes and parallelization potential. Suggest what to focus on.
-2. **User confirms** — The user decides what to work on. Focus is set in the session.
-3. **Deep-dive** — Research relevant code thoroughly. Think through edge cases, interactions, risks. Form a detailed approach. If not confident, research more or ask.
-4. **Present findings** — Show the analysis. Suggest `/flow:implement` when ready, or `/flow:lock` if the plan needs revision.
+Use `/flow:next` for a structured approach — it analyzes progress, checks what other sessions are working on, assesses task sizes, suggests parallelization, and guides the deep-dive. Or just tell the agent what to work on directly ("let's do task 1 and 2") — the agent will set focus and deep-dive into it.
+
+Either way, the agent should deep-dive before implementing: research the relevant code, think through edge cases, pre-plan important structures (types, schemas, interfaces), and present findings before suggesting `/flow:implement`.
 
 Code writes are still blocked — deep-dive is analysis, not implementation.
 

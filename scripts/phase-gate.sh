@@ -58,7 +58,7 @@ case "$PHASE" in
     if [ -n "$FOCUS" ]; then
       CONTEXT="**Phase: planned | Focus: ${FOCUS}.** Follow /flow:next deep-dive rules — research thoroughly, think through edge cases. No code writes. Keep iterating: ask yourself if you are confident enough to implement this correctly. If not, dig deeper or ask. When confident, suggest the user runs /flow:implement."
     else
-      CONTEXT="**Phase: planned.** Follow /flow:build planned-phase rules. Suggest the user runs /flow:next to pick tasks and deep-dive before implementing."
+      CONTEXT="**Phase: planned.** Follow /flow:build planned-phase rules. Suggest the user runs /flow:next or tells you which tasks to focus on. Deep-dive before implementing."
     fi
     ;;
   implementing)
