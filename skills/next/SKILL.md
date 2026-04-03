@@ -1,6 +1,7 @@
 ---
 name: next
 description: "Analyze what's next, pick tasks, and deep-dive before implementation. The hub between planning and implementing."
+argument-hint: "[--no-lock]"
 ---
 
 Invoked as `/flow:next [--no-lock]`.

@@ -1,4 +1,5 @@
 ---
+name: rules
 description: "Show all active quality rules for this project — both always-on and dynamic flow rules."
 ---
 

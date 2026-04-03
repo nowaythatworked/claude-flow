@@ -1,5 +1,7 @@
 ---
+name: add-rule
 description: "Add a new quality rule based on a pattern discovered during work. Grows the project's rule set organically."
+argument-hint: "<pattern description>"
 ---
 
 # /add-rule — Capture a Quality Rule

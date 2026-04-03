@@ -1,6 +1,7 @@
 ---
 name: reset
 description: "Reset the workflow — archive or delete the task file and reset the phase. Use when starting fresh or switching to a new task."
+argument-hint: "[--archive|--delete|--phase-only] [-y]"
 ---
 
 Invoked as `/flow:reset [flags]`.

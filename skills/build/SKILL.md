@@ -1,6 +1,7 @@
 ---
 name: build
 description: "Structured workflow for complex tasks. Understand → plan → approve → deep-dive → implement with quality enforcement and delegation."
+argument-hint: "<task description>"
 ---
 
 Invoked as `/flow:build <task description>`.
