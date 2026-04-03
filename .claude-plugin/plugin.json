@@ -1,6 +1,6 @@
 {
   "name": "flow",
-  "version": "0.3.0",
+  "version": "0.3.1",
   "description": "Lightweight workflow framework for Claude Code. Quality enforcement via rules, hooks, and structured workflows. Designed for production monorepos.",
   "author": {
     "name": "Jan"
