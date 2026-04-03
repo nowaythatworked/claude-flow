@@ -72,9 +72,12 @@ Rules are injected at session start and re-evaluated throughout the conversation
 A structured loop with explicit user gates — plan in conversation, approve to commit, deep-dive before implementing.
 
 ```
+                                                   /flow:next or
+                                                   natural language
+                                                         │
 /flow:build → planning ──(/flow:approve)──→ planned ──(deep-dive)──→ /flow:implement ──→ implementing
-                 ↑                            ↑    /flow:next or                             │
-                 └────(/flow:lock)────────────┴────natural language───(/flow:lock)────────────┘
+                 ↑                            ↑                                              │
+                 └────(/flow:lock)────────────┴──────────────(/flow:lock)─────────────────────┘
 ```
 
 ### Phase 1: Planning (conversation only)
