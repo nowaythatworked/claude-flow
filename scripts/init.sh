@@ -83,8 +83,8 @@ fi
 mkdir -p "$CWD/.flow/archive"
 
 # --- 5. Clean up stale state files ---
-# SESSIONS is managed by /flow:build, not by init.
-for f in SESSIONS PHASE ACTIVE_TASK; do
+# SESSIONS.json is managed by /flow:build, not by init.
+for f in SESSIONS SESSIONS.json PHASE ACTIVE_TASK; do
   if [ -f "$CWD/.flow/$f" ]; then
     rm "$CWD/.flow/$f"
     echo "Removed stale .flow/$f"
