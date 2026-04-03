@@ -28,7 +28,7 @@ Flow has two layers that work independently:
 
 **1. Quality enforcement (always active).** Rules are injected into every session and every subagent via hooks. You don't invoke a command — it's always there. This is the primary value. Every session benefits from type safety rules, DRY enforcement, TDD requirements, and whatever project-specific rules you add over time.
 
-**2. Structured workflow (optional).** `/flow:build` provides an adaptive understand → plan → implement loop for complex tasks. Use it when you need structure. Skip it for quick fixes.
+**2. Structured workflow (optional).** `/flow:build` provides an understand → plan → approve → deep-dive → implement loop for complex tasks. Use it when you need structure. Skip it for quick fixes.
 
 Most of the value comes from layer 1. You can use flow for months and never run `/flow:build` — the hooks and rules still improve every session.
 
@@ -63,44 +63,76 @@ When you discover a mistake pattern:
 
 A focused rule file is created, committed to git, immediately active for the team. Over time, `.flow/rules/` becomes a living knowledge base. The more rules you maintain, the fewer corrections you make.
 
+### Rule Persistence
+
+Rules are injected at session start and re-evaluated throughout the conversation. In long sessions, rules can drift out of the agent's attention due to context compression. A persistent reminder on every message nudges the agent to follow its rules, and `/flow:reload-rules` re-reads all rules and re-evaluates dynamic rules when they've been lost. This works in any session — not just `/flow:build`.
+
 ## The `/flow:build` Workflow
 
-An adaptive loop — not a rigid pipeline. The orchestrator continuously judges: *"Do I understand enough to implement this confidently?"*
+A structured loop with explicit user gates — plan in conversation, approve to commit, deep-dive before implementing.
 
-### 1. Understand the Big Picture
-Read context, ask questions, discuss. Restate understanding including business context and domain assumptions. The user decides when understanding is sufficient.
+```
+/flow:build → planning ──(/flow:approve)──→ planned ──(/flow:implement)──→ implementing
+                 ↑                            ↑                               │
+                 └────(/flow:lock)────────────┴─────────(/flow:lock)──────────┘
+```
 
-### 2. High-Level Plan
-Search existing codebase for patterns first. Evaluate dynamic rules. Present major areas — NOT detailed task lists yet. Discuss trade-offs. Create the task file as a scratchpad/checklist. User picks which area to work on.
+### Phase 1: Planning (conversation only)
 
-### 3. Deep Dive (per area)
+Everything happens in conversation. No files, no task lists, no artifacts.
 
-**Orient:** Read the task file and `git log` to understand current state — what's done, what's in progress, any notes from previous areas.
+1. **Understand** — Read context broadly, ask questions, restate understanding including business context and assumptions. The user decides when understanding is sufficient.
+2. **Plan** — Search codebase for existing patterns first. Develop a mid-level plan in conversation — major areas, approach per area, trade-offs. Not a detailed task list, not a vague summary.
+3. **Reflect on scope** — Is this small (one area) or large (multiple areas)? Suggest splitting into separate sessions if warranted.
+4. **Present & wait** — Present the plan clearly. Don't write anything, don't implement. Suggest the user runs `/flow:approve`.
 
-**Judge confidence:** *"Do I have everything I need to implement this confidently, respecting all loaded rules?"*
+Code writes outside `.flow/` are blocked during this phase.
 
-- **Not confident?** Research more (delegate to subagents), explore code, ask the user.
-- **Confident?** Create a detailed task list for THIS area only.
-- The user can override: *"good enough, implement"* or *"go deeper."*
+### Gate: `/flow:approve`
 
-Note important discoveries in the task file that could affect other areas.
+The user runs `/flow:approve` to lock in the plan. The plan gets written to a task file (`.flow/<meaningful-name>.md`) as a checklist with section headings. Phase transitions to **planned**.
 
-### 4. Implement
-Delegate to `flow:dev` agents. Single tasks → foreground subagent. Parallel tasks → agentteam. Ensure implementation complies with loaded rules. After each task: verify, test, update the task file.
+### Phase 2: Planned (deep-dive + task selection)
 
-### 5. Next Area
+The plan exists in the task file. Now pick tasks and deep-dive before implementing.
 
-**Continue in the same context** if it's not bloated — orchestrator presents progress, user picks next area, back to step 3.
+1. **`/flow:next`** — Analyze what's done, what's remaining, what other sessions are working on. Assess task sizes and parallelization potential. Suggest what to focus on.
+2. **User confirms** — The user decides what to work on. Focus is set in the session.
+3. **Deep-dive** — Research relevant code thoroughly. Think through edge cases, interactions, risks. Form a detailed approach. If not confident, research more or ask.
+4. **Present findings** — Show the analysis. Suggest `/flow:implement` when ready, or `/flow:lock` if the plan needs revision.
 
-**Rewind for a clean context** on larger tasks — run `/rewind`, select the message where you chose the first area, edit it to the next area. The orchestrator gets a clean context with the full discussion and plan intact, orients via task file + git log, and deep dives the new area.
+Code writes are still blocked — deep-dive is analysis, not implementation.
 
-**Fork before risky changes** — `/fork before-refactor` saves the current state. Resume the fork if things go wrong. Also useful for exploring alternative approaches or creating resume points for future sessions.
+### Gate: `/flow:implement`
+
+The user runs `/flow:implement`. Granular tasks are created in context (via TaskCreate, not written to file). Phase transitions to **implementing**.
+
+### Phase 3: Implementing
+
+Code writes unlocked. Delegate substantial work to `flow:dev` agents.
+
+1. **Execute** — Delegate multi-file changes, complex logic, anything benefiting from focused context. Orchestrator handles coordination, verification, quick operations.
+2. **Verify** — Run tests, check output after each task.
+3. **Document** — Write what was done + commit hashes to the task file. The file becomes a log of execution, not planning.
+4. **Next** — Suggest `/flow:next` for the next task, or `/flow:reset` if everything is done.
+
+### Parallel Work with Branching
+
+When `/flow:next` identifies tasks that can be worked on independently:
+
+1. Main session identifies parallelizable tasks via `/flow:next`
+2. User opens new terminals, runs `claude --resume <session-id>` to create branches
+3. Each branch gets its own session with its own focus — hook enforcement is per-session
+4. Deep-dive and implement in parallel across sessions
+5. Sessions track which tasks are claimed via focus fields, preventing collisions
+
+Branch detection is automatic — the `SessionStart` hook detects branched sessions and inherits the parent's task file and phase. The `SESSIONS.json` tracks parent relationships.
 
 ### Scaling
 
-- **Small task** (one function, a few files): Steps 1-2 in one exchange. Already confident. Single agent implements everything. No task file, no rewind.
-- **Medium task** (feature across a few files): Full loop, all areas in one session without rewinds.
-- **Large task** (multi-area ticket, redesign): High-level plan, rewind between areas, task file as scratchpad, deep dives per area.
+- **Small task** (one function, a few files): Planning phase covers everything. Brief deep-dive. Single agent implements.
+- **Medium task** (feature across a few files): Full loop, all areas in one session.
+- **Large task** (multi-area ticket, redesign): High-level plan, branch into parallel sessions for independent areas, deep-dive per area.
 
 ## Technical Details
 
@@ -109,11 +141,12 @@ Delegate to `flow:dev` agents. Single tasks → foreground subagent. Parallel ta
 | Hook | When | What |
 |------|------|------|
 | `SessionStart` | Start + compaction | Injects always-on rules, survives context compression |
-| `SessionStart` | Resume (branch) | Auto-detects branched `/flow:build` sessions, registers new session |
+| `SessionStart` | Resume (branch) | Auto-detects branched `/flow:build` sessions, registers with parent tracking |
 | `SubagentStart` | Every agent spawn | Injects quality rules directly into subagent context |
-| `UserPromptSubmit` | Every prompt | Phase enforcement reminder (only for registered `/flow:build` sessions) |
+| `UserPromptSubmit` | Every prompt | Rule reminder: follow injected rules, `/flow:reload-rules` if lost |
+| `UserPromptSubmit` | Every prompt | Phase-aware reminder with focus context (only for registered sessions) |
 | `UserPromptSubmit` | Substantial prompts | Sonnet evaluates which dynamic rules apply |
-| `PostToolUse` | After Write/Edit | Phase guard: warns on code writes during planning mode |
+| `PostToolUse` | After Write/Edit | Phase guard: blocks code writes during planning and planned phases |
 | `PostToolUse` | After Write/Edit | Scans for `any` types, unsafe assertions, `@ts-ignore` |
 | `PostToolUse` | Every 15 tool uses | Re-evaluates dynamic rules based on transcript |
 
@@ -133,14 +166,17 @@ Delegate to `flow:dev` agents. Single tasks → foreground subagent. Parallel ta
 
 | Command | What |
 |---------|------|
-| `/flow:build <task>` | Adaptive workflow for complex tasks |
-| `/flow:init` | Initialize flow in current project (scaffold .flow/) |
-| `/flow:approve` | Approve the plan, unlock implementation |
-| `/flow:lock` | Return to planning mode |
-| `/flow:phase` | Show current workflow phase |
+| `/flow:build <task>` | Start structured workflow — enter planning phase |
+| `/flow:approve` | Approve plan → write to task file (planning→planned) |
+| `/flow:next` | Analyze what's next, pick tasks, deep-dive |
+| `/flow:implement` | Unlock code writes, start implementing (planned→implementing) |
+| `/flow:lock` | Go back one phase (implementing→planned, planned→planning) |
+| `/flow:phase` | Show current phase, focus, and available commands |
 | `/flow:reset` | Archive task file and reset phase |
+| `/flow:init` | Initialize flow in current project (scaffold .flow/) |
 | `/flow:add-rule` | Add a new rule from a pattern you discovered |
 | `/flow:rules` | Show all active rules and their status |
+| `/flow:reload-rules` | Re-read all rules into context (use when rules get lost) |
 
 ## Project Structure
 
@@ -153,7 +189,7 @@ your-project/
 │   │   └── flow-dev.md      # Implementation agent (with Stop hook)
 │   └── rules/               # Team's native Claude Code rules (untouched)
 └── .flow/
-    ├── SESSIONS              # Active session state (phase + task per session)
+    ├── SESSIONS.json         # Active session state (phase, focus, parent per session)
     ├── <task-name>.md        # Task file (named by context, e.g. fix-auth-bug.md)
     ├── archive/              # Archived task files from completed work
     └── rules/
@@ -165,11 +201,11 @@ Commit `.flow/` and `.claude/agents/` to git. Teammates get everything by clonin
 
 ## Design Philosophy
 
-- **In-context over files** — understanding stays in the context window, not intermediate files that agents ignore. Learnings get stored as rules which are enforced via hooks.
+- **Plan in conversation, not files** — understanding stays in context. The task file is an artifact of approval, not a planning scratchpad.
+- **Explicit user gates** — no phase transitions without user commands. The agent suggests, the user decides.
+- **Deep-dive before implementing** — research and reason before writing code. Confidence is earned, not assumed.
+- **Session-scoped enforcement** — hooks are per-session. A quick side-task in another session is unaffected by an active `/flow:build`.
 - **No codebase mapping** — the codebase is the truth. CLAUDE.md has conventions. Generated summaries are noise.
-- **No project.md** — a monorepo can't be summarized in one file. Domain context is task-scoped.
-- **No lifecycle enforcement** — the workflow adapts to the task. The orchestrator judges what's needed.
-- **Confidence-gated implementation** — the orchestrator won't implement when uncertain. It researches more or asks.
 - **Rules grow organically** — every shipped rule traces to a real correction from real sessions.
 - **Hooks for enforcement, not prompts** — prompt instructions get forgotten mid-session. Hooks fire every time.
 - **Agents learn** — `flow:dev` has persistent project memory via Claude Code's native memory system.
@@ -198,9 +234,9 @@ Discuss before implementing, delegate to agents, verify work, track progress, su
 |---------|------|-----|
 | `map-codebase` → project.md | No mapping | Monorepos can't be summarized |
 | `discuss-phase` (formulaic) | Open-ended discussion | User decides when sufficient |
-| `plan-phase` → PLAN.md | In-context plan + task file | Plan preserved through /rewind |
+| `plan-phase` → PLAN.md | In-context plan → task file on approve | Plan lives in conversation until committed |
 | `execute-phase` (waves) | Delegated with user in the loop | No silent divergence |
-| `.planning/` (6+ files/phase) | `.flow/SESSIONS` + task file + conversation | Minimal state, not a state machine |
+| `.planning/` (6+ files/phase) | `SESSIONS.json` + task file + conversation | Minimal state, not a state machine |
 | Framework-managed agents | Natural delegation | No lifecycle management overhead |
 
 ### The key insight
