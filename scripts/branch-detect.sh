@@ -1,13 +1,13 @@
 #!/bin/bash
 # SessionStart hook: auto-register branched sessions.
-# On source=resume, if SESSIONS exists but this session isn't in it,
+# On source=resume, if SESSIONS.json exists but this session isn't in it,
 # detect if this is a branched /flow:build session and register it.
 #
 # Detection strategy:
 #   1. grep transcript for "flow:build" → confirms build session
-#   2. grep transcript for parent session IDs from SESSIONS → identifies task
+#   2. grep transcript for parent session IDs from SESSIONS.json → identifies task
 #   3. grep transcript for task filenames → fallback identification
-#   4. LLM (haiku) semantic check → last resort for compacted/ambiguous cases
+#   4. LLM (sonnet) semantic check → last resort for compacted/ambiguous cases
 
 set -euo pipefail
 
@@ -26,17 +26,15 @@ if [ -z "$INPUT" ]; then
 fi
 
 # --- Parse input ---
-if command -v jq &>/dev/null; then
-  SOURCE=$(echo "$INPUT" | jq -r '.source // empty' 2>/dev/null || true)
-  CWD=$(echo "$INPUT" | jq -r '.cwd // empty' 2>/dev/null || true)
-  SESSION_ID=$(echo "$INPUT" | jq -r '.session_id // empty' 2>/dev/null || true)
-  TRANSCRIPT=$(echo "$INPUT" | jq -r '.transcript_path // empty' 2>/dev/null || true)
-else
-  SOURCE=$(echo "$INPUT" | sed -n 's/.*"source"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p' | head -1)
-  CWD=$(echo "$INPUT" | sed -n 's/.*"cwd"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p' | head -1)
-  SESSION_ID=$(echo "$INPUT" | sed -n 's/.*"session_id"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p' | head -1)
-  TRANSCRIPT=$(echo "$INPUT" | sed -n 's/.*"transcript_path"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p' | head -1)
+if ! command -v jq &>/dev/null; then
+  echo '{}'
+  exit 0
 fi
+
+SOURCE=$(echo "$INPUT" | jq -r '.source // empty' 2>/dev/null || true)
+CWD=$(echo "$INPUT" | jq -r '.cwd // empty' 2>/dev/null || true)
+SESSION_ID=$(echo "$INPUT" | jq -r '.session_id // empty' 2>/dev/null || true)
+TRANSCRIPT=$(echo "$INPUT" | jq -r '.transcript_path // empty' 2>/dev/null || true)
 
 # Only act on resume (which includes branching)
 if [ "$SOURCE" != "resume" ]; then
@@ -49,7 +47,7 @@ if [ -z "$CWD" ] || [ -z "$SESSION_ID" ]; then
   exit 0
 fi
 
-SESSIONS_FILE="$CWD/.flow/SESSIONS"
+SESSIONS_FILE="$CWD/.flow/SESSIONS.json"
 
 # No active sessions = nothing to inherit
 if [ ! -f "$SESSIONS_FILE" ]; then
@@ -58,7 +56,8 @@ if [ ! -f "$SESSIONS_FILE" ]; then
 fi
 
 # Already registered = not a branch, just a normal resume
-if grep -q "^${SESSION_ID} " "$SESSIONS_FILE" 2>/dev/null; then
+EXISTING=$(jq -r --arg id "$SESSION_ID" '.[$id] // empty' "$SESSIONS_FILE" 2>/dev/null || true)
+if [ -n "$EXISTING" ] && [ "$EXISTING" != "null" ]; then
   echo '{}'
   exit 0
 fi
@@ -71,60 +70,66 @@ fi
 
 # --- Helper: register and exit ---
 register_and_exit() {
-  local phase="$1" task="$2"
+  local parent_id="$1" phase="$2" task="$3"
   "$SCRIPT_DIR/session.sh" "$CWD" "$SESSION_ID" --set "$phase" "$task"
+  if [ -n "$parent_id" ]; then
+    "$SCRIPT_DIR/session.sh" "$CWD" "$SESSION_ID" --set-parent "$parent_id"
+  fi
   echo '{}'
   exit 0
 }
 
+# --- Get all session IDs and their data ---
+SESSION_IDS=$(jq -r 'keys[]' "$SESSIONS_FILE" 2>/dev/null || true)
+TOTAL=$(echo "$SESSION_IDS" | grep -c . 2>/dev/null || echo "0")
+
 # --- Single task shortcut ---
-TOTAL=$(wc -l < "$SESSIONS_FILE" | tr -d ' ')
 if [ "$TOTAL" -eq 1 ]; then
-  # Only one task — check if this is a build session at all
   if grep -q "flow:build" "$TRANSCRIPT" 2>/dev/null; then
-    PHASE=$(awk '{print $2}' "$SESSIONS_FILE")
-    TASK=$(awk '{print $3}' "$SESSIONS_FILE")
-    register_and_exit "$PHASE" "$TASK"
+    PARENT_ID=$(echo "$SESSION_IDS" | head -1)
+    PHASE=$(jq -r --arg id "$PARENT_ID" '.[$id].phase' "$SESSIONS_FILE")
+    TASK=$(jq -r --arg id "$PARENT_ID" '.[$id].task_file' "$SESSIONS_FILE")
+    register_and_exit "$PARENT_ID" "$PHASE" "$TASK"
   fi
-  # Fall through to LLM check
 fi
 
 # --- Multi-task: identify which task via parent session ID ---
 if grep -q "flow:build" "$TRANSCRIPT" 2>/dev/null; then
 
   # Strategy 1: grep for parent session IDs in transcript
-  while IFS= read -r line; do
-    PARENT_ID=$(echo "$line" | awk '{print $1}')
+  for PARENT_ID in $SESSION_IDS; do
     [ -z "$PARENT_ID" ] && continue
     if grep -q "$PARENT_ID" "$TRANSCRIPT" 2>/dev/null; then
-      PHASE=$(echo "$line" | awk '{print $2}')
-      TASK=$(echo "$line" | awk '{print $3}')
-      register_and_exit "$PHASE" "$TASK"
+      PHASE=$(jq -r --arg id "$PARENT_ID" '.[$id].phase' "$SESSIONS_FILE")
+      TASK=$(jq -r --arg id "$PARENT_ID" '.[$id].task_file' "$SESSIONS_FILE")
+      register_and_exit "$PARENT_ID" "$PHASE" "$TASK"
     fi
-  done < "$SESSIONS_FILE"
+  done
 
   # Strategy 2: grep for task filenames in transcript
   MATCH_COUNT=0
+  MATCHED_PARENT=""
   MATCHED_PHASE=""
   MATCHED_TASK=""
-  while IFS= read -r line; do
-    TASK=$(echo "$line" | awk '{print $3}')
+  for PARENT_ID in $SESSION_IDS; do
+    [ -z "$PARENT_ID" ] && continue
+    TASK=$(jq -r --arg id "$PARENT_ID" '.[$id].task_file' "$SESSIONS_FILE")
     [ -z "$TASK" ] && continue
     if grep -q "$TASK" "$TRANSCRIPT" 2>/dev/null; then
-      MATCHED_PHASE=$(echo "$line" | awk '{print $2}')
+      MATCHED_PARENT="$PARENT_ID"
+      MATCHED_PHASE=$(jq -r --arg id "$PARENT_ID" '.[$id].phase' "$SESSIONS_FILE")
       MATCHED_TASK="$TASK"
       MATCH_COUNT=$((MATCH_COUNT + 1))
     fi
-  done < "$SESSIONS_FILE"
+  done
 
   if [ "$MATCH_COUNT" -eq 1 ]; then
-    register_and_exit "$MATCHED_PHASE" "$MATCHED_TASK"
+    register_and_exit "$MATCHED_PARENT" "$MATCHED_PHASE" "$MATCHED_TASK"
   fi
 fi
 
 # --- LLM fallback: detect + disambiguate ---
 if command -v claude &>/dev/null; then
-  # Read beginning + end of transcript for full picture
   TOTAL_LINES=$(wc -l < "$TRANSCRIPT" 2>/dev/null | tr -d ' ')
   if [ "$TOTAL_LINES" -le 100 ]; then
     CONVERSATION=$(cat "$TRANSCRIPT" 2>/dev/null | head -c 8000)
@@ -140,9 +145,12 @@ ${CONV_TAIL}"
 
   # Read task file contents for matching
   TASK_CONTEXT=""
-  while IFS= read -r line; do
-    TASK=$(echo "$line" | awk '{print $3}')
+  TASK_LIST=""
+  for PARENT_ID in $SESSION_IDS; do
+    [ -z "$PARENT_ID" ] && continue
+    TASK=$(jq -r --arg id "$PARENT_ID" '.[$id].task_file' "$SESSIONS_FILE")
     [ -z "$TASK" ] && continue
+    TASK_LIST="${TASK_LIST}${TASK}, "
     TASK_PATH="$CWD/.flow/$TASK"
     if [ -f "$TASK_PATH" ]; then
       CONTENT=$(head -80 "$TASK_PATH" 2>/dev/null || true)
@@ -151,9 +159,8 @@ ${CONV_TAIL}"
 ${CONTENT}
 "
     fi
-  done < "$SESSIONS_FILE"
-
-  TASK_LIST=$(awk '{print $3}' "$SESSIONS_FILE" | sort -u | tr '\n' ', ' | sed 's/,$//')
+  done
+  TASK_LIST=$(echo "$TASK_LIST" | sed 's/, $//')
 
   if [ -n "$CONVERSATION" ] && [ -n "$TASK_LIST" ]; then
     PROMPT="You are checking if this conversation is part of a /flow:build workflow session.
@@ -174,11 +181,14 @@ If this is NOT a build session, respond with ONLY \"no\"."
     ANSWER=$(echo "$PROMPT" | claude -p --model sonnet --output-format json 2>/dev/null | jq -r '.result // empty' 2>/dev/null || true)
 
     if [ -n "$ANSWER" ] && [ "$ANSWER" != "no" ]; then
-      MATCH_LINE=$(grep " ${ANSWER}$" "$SESSIONS_FILE" 2>/dev/null | tail -1)
-      if [ -n "$MATCH_LINE" ]; then
-        PHASE=$(echo "$MATCH_LINE" | awk '{print $2}')
-        register_and_exit "$PHASE" "$ANSWER"
-      fi
+      # Find the parent session for this task
+      for PARENT_ID in $SESSION_IDS; do
+        TASK=$(jq -r --arg id "$PARENT_ID" '.[$id].task_file' "$SESSIONS_FILE")
+        if [ "$TASK" = "$ANSWER" ]; then
+          PHASE=$(jq -r --arg id "$PARENT_ID" '.[$id].phase' "$SESSIONS_FILE")
+          register_and_exit "$PARENT_ID" "$PHASE" "$ANSWER"
+        fi
+      done
     fi
   fi
 fi

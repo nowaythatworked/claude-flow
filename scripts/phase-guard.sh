@@ -1,7 +1,7 @@
 #!/bin/bash
-# PostToolUse hook for Write|Edit: warn on code writes during planning phase.
-# Session-aware — only fires for the session that has an active planning phase.
-# Pure bash — no LLM calls.
+# PostToolUse hook for Write|Edit: warn on code writes during planning/planned phases.
+# Session-aware — only fires for sessions with an active planning or planned phase.
+# Pure bash + jq — no LLM calls.
 
 set -euo pipefail
 
@@ -18,22 +18,21 @@ if [ -z "$INPUT" ]; then
 fi
 
 # --- Parse input ---
-if command -v jq &>/dev/null; then
-  FILE_PATH=$(echo "$INPUT" | jq -r '.tool_input.file_path // empty' 2>/dev/null || true)
-  CWD=$(echo "$INPUT" | jq -r '.cwd // empty' 2>/dev/null || true)
-  SESSION_ID=$(echo "$INPUT" | jq -r '.session_id // empty' 2>/dev/null || true)
-else
-  FILE_PATH=$(echo "$INPUT" | sed -n 's/.*"file_path"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p' | head -1)
-  CWD=$(echo "$INPUT" | sed -n 's/.*"cwd"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p' | head -1)
-  SESSION_ID=$(echo "$INPUT" | sed -n 's/.*"session_id"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p' | head -1)
+if ! command -v jq &>/dev/null; then
+  echo '{}'
+  exit 0
 fi
+
+FILE_PATH=$(echo "$INPUT" | jq -r '.tool_input.file_path // empty' 2>/dev/null || true)
+CWD=$(echo "$INPUT" | jq -r '.cwd // empty' 2>/dev/null || true)
+SESSION_ID=$(echo "$INPUT" | jq -r '.session_id // empty' 2>/dev/null || true)
 
 if [ -z "$CWD" ] || [ -z "$FILE_PATH" ] || [ -z "$SESSION_ID" ]; then
   echo '{}'
   exit 0
 fi
 
-SESSIONS_FILE="${CWD}/.flow/SESSIONS"
+SESSIONS_FILE="${CWD}/.flow/SESSIONS.json"
 
 if [ ! -f "$SESSIONS_FILE" ]; then
   echo '{}'
@@ -41,10 +40,10 @@ if [ ! -f "$SESSIONS_FILE" ]; then
 fi
 
 # --- Look up this session's phase ---
-PHASE=$(grep "^${SESSION_ID} " "$SESSIONS_FILE" 2>/dev/null | awk '{print $2}' || true)
+PHASE=$(jq -r --arg id "$SESSION_ID" '.[$id].phase // empty' "$SESSIONS_FILE" 2>/dev/null || true)
 
-# Only enforce during planning
-if [ "$PHASE" != "planning" ]; then
+# Only enforce during planning and planned — implementing allows writes
+if [ "$PHASE" != "planning" ] && [ "$PHASE" != "planned" ]; then
   echo '{}'
   exit 0
 fi
@@ -59,18 +58,17 @@ case "$FILE_PATH" in
 esac
 
 # --- Warn ---
-WARNING="You wrote to \`${FILE_PATH}\` during **planning** phase. No code changes until /flow:approve. Re-read the /flow:build skill if needed."
-
-if command -v jq &>/dev/null; then
-  jq -n --arg ctx "$WARNING" '{
-    hookSpecificOutput: {
-      hookEventName: "PostToolUse",
-      additionalContext: $ctx
-    }
-  }'
+if [ "$PHASE" = "planning" ]; then
+  WARNING="You wrote to \`${FILE_PATH}\` during **planning** phase. No code changes until the plan is approved. Re-read /flow:build rules."
 else
-  ESCAPED=$(printf '%s' "$WARNING" | python3 -c 'import sys,json; print(json.dumps(sys.stdin.read()))' 2>/dev/null || printf '"%s"' "$WARNING")
-  echo "{\"hookSpecificOutput\":{\"additionalContext\":${ESCAPED}}}"
+  WARNING="You wrote to \`${FILE_PATH}\` during **planned** phase (deep-dive). No code changes until /flow:implement. Re-read /flow:next rules."
 fi
+
+jq -n --arg ctx "$WARNING" '{
+  hookSpecificOutput: {
+    hookEventName: "PostToolUse",
+    additionalContext: $ctx
+  }
+}'
 
 exit 0

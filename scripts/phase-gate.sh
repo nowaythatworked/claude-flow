@@ -1,7 +1,7 @@
 #!/bin/bash
 # UserPromptSubmit hook: inject phase-appropriate reminders.
-# Reads .flow/SESSIONS for the current session's phase.
-# Pure bash — no LLM calls.
+# Reads .flow/SESSIONS.json for the current session's phase and focus.
+# Pure bash + jq — no LLM calls.
 
 set -euo pipefail
 
@@ -18,41 +18,51 @@ if [ -z "$INPUT" ]; then
 fi
 
 # --- Parse input ---
-if command -v jq &>/dev/null; then
-  CWD=$(echo "$INPUT" | jq -r '.cwd // empty' 2>/dev/null || true)
-  SESSION_ID=$(echo "$INPUT" | jq -r '.session_id // empty' 2>/dev/null || true)
-else
-  CWD=$(echo "$INPUT" | sed -n 's/.*"cwd"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p' | head -1)
-  SESSION_ID=$(echo "$INPUT" | sed -n 's/.*"session_id"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p' | head -1)
+if ! command -v jq &>/dev/null; then
+  echo '{}'
+  exit 0
 fi
+
+CWD=$(echo "$INPUT" | jq -r '.cwd // empty' 2>/dev/null || true)
+SESSION_ID=$(echo "$INPUT" | jq -r '.session_id // empty' 2>/dev/null || true)
 
 if [ -z "$CWD" ] || [ -z "$SESSION_ID" ]; then
   echo '{}'
   exit 0
 fi
 
-SESSIONS_FILE="${CWD}/.flow/SESSIONS"
+SESSIONS_FILE="${CWD}/.flow/SESSIONS.json"
 
 if [ ! -f "$SESSIONS_FILE" ]; then
   echo '{}'
   exit 0
 fi
 
-# --- Look up this session's phase ---
-PHASE=$(grep "^${SESSION_ID} " "$SESSIONS_FILE" 2>/dev/null | awk '{print $2}' || true)
+# --- Look up this session ---
+ENTRY=$(jq -r --arg id "$SESSION_ID" '.[$id] // empty' "$SESSIONS_FILE" 2>/dev/null || true)
 
-if [ -z "$PHASE" ]; then
+if [ -z "$ENTRY" ] || [ "$ENTRY" = "null" ]; then
   echo '{}'
   exit 0
 fi
 
+PHASE=$(echo "$ENTRY" | jq -r '.phase' 2>/dev/null || true)
+FOCUS=$(echo "$ENTRY" | jq -r '.focus // [] | if length > 0 then join(", ") else "" end' 2>/dev/null || true)
+
 # --- Build phase reminder ---
 case "$PHASE" in
   planning)
-    CONTEXT="**Phase: planning.** Follow the /flow:build skill rules for steps 1-4. No implementation until the user runs /flow:approve. If you can't recall the rules, re-read the skill."
+    CONTEXT="**Phase: planning.** Follow /flow:build planning rules — understand deeply, plan in conversation. No code writes. Keep questioning yourself: Do you understand enough? Have you searched for side-effects, affected areas, and new possibilities? Is the plan solid enough to approve? If not, keep iterating. When genuinely confident, suggest the user runs /flow:approve."
+    ;;
+  planned)
+    if [ -n "$FOCUS" ]; then
+      CONTEXT="**Phase: planned | Focus: ${FOCUS}.** Follow /flow:next deep-dive rules — research thoroughly, think through edge cases. No code writes. Keep iterating: ask yourself if you are confident enough to implement this correctly. If not, dig deeper or ask. When confident, suggest the user runs /flow:implement."
+    else
+      CONTEXT="**Phase: planned.** Follow /flow:build planned-phase rules. Suggest the user runs /flow:next to pick tasks and deep-dive before implementing."
+    fi
     ;;
   implementing)
-    CONTEXT="**Phase: implementing.** Follow the /flow:build skill rules for steps 5-6. Delegate where it makes sense. If you can't recall the rules, re-read the skill."
+    CONTEXT="**Phase: implementing.** Follow /flow:build implementation rules — delegate substantial work, verify results. When tasks are complete, suggest the user runs /flow:next for the next task."
     ;;
   *)
     echo '{}'
@@ -61,16 +71,11 @@ case "$PHASE" in
 esac
 
 # --- Output ---
-if command -v jq &>/dev/null; then
-  jq -n --arg ctx "$CONTEXT" '{
-    hookSpecificOutput: {
-      hookEventName: "UserPromptSubmit",
-      additionalContext: $ctx
-    }
-  }'
-else
-  ESCAPED=$(printf '%s' "$CONTEXT" | python3 -c 'import sys,json; print(json.dumps(sys.stdin.read()))' 2>/dev/null || printf '"%s"' "$CONTEXT")
-  echo "{\"hookSpecificOutput\":{\"additionalContext\":${ESCAPED}}}"
-fi
+jq -n --arg ctx "$CONTEXT" '{
+  hookSpecificOutput: {
+    hookEventName: "UserPromptSubmit",
+    additionalContext: $ctx
+  }
+}'
 
 exit 0

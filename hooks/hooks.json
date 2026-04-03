@@ -16,6 +16,15 @@
         "hooks": [
           {
             "type": "command",
+            "command": "${CLAUDE_PLUGIN_ROOT}/scripts/rule-reminder.sh",
+            "timeout": 5
+          }
+        ]
+      },
+      {
+        "hooks": [
+          {
+            "type": "command",
             "command": "${CLAUDE_PLUGIN_ROOT}/scripts/phase-gate.sh",
             "timeout": 5
           }
