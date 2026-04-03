@@ -75,7 +75,7 @@ A structured loop with explicit user gates — plan in conversation, approve to 
                                                    /flow:next or
                                                    natural language
                                                          │
-/flow:build → planning ──(/flow:approve)──→ planned ──(deep-dive)──→ /flow:implement ──→ implementing
+/flow:build → planning ──(/flow:approve)──→ planned ──(pick tasks, deep-dive)──→ /flow:implement ──→ implementing
                  ↑                            ↑                                              │
                  └────(/flow:lock)────────────┴──────────────(/flow:lock)─────────────────────┘
 ```
