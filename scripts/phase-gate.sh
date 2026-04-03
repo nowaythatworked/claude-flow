@@ -25,11 +25,17 @@ fi
 
 CWD=$(echo "$INPUT" | jq -r '.cwd // empty' 2>/dev/null || true)
 SESSION_ID=$(echo "$INPUT" | jq -r '.session_id // empty' 2>/dev/null || true)
+PROMPT=$(echo "$INPUT" | jq -r '.prompt // empty' 2>/dev/null || true)
 
 if [ -z "$CWD" ] || [ -z "$SESSION_ID" ]; then
   echo '{}'
   exit 0
 fi
+
+# Skip injection for /flow: commands — they manage their own state
+case "$PROMPT" in
+  /flow:*) echo '{}'; exit 0 ;;
+esac
 
 SESSIONS_FILE="${CWD}/.flow/SESSIONS.json"
 

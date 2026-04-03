@@ -3,7 +3,7 @@ name: next
 description: "Analyze what's next, pick tasks, and deep-dive before implementation. The hub between planning and implementing."
 ---
 
-Invoked as `/flow:next`.
+Invoked as `/flow:next [--no-lock]`.
 
 ## What this does
 
@@ -11,11 +11,17 @@ Checkpoint and navigation skill. Analyzes the current state of the task, helps p
 
 ## Instructions
 
-### 1. Orient
+### 1. Orient & lock
 
 - Get state: `"${CLAUDE_PLUGIN_ROOT}/scripts/session.sh" . "${CLAUDE_SESSION_ID}" --get`
   - If empty: no active workflow. Suggest `/flow:build`.
   - If phase is `planning`: tell the user to finish planning first. Suggest `/flow:approve` when the plan is ready.
+
+- **If phase is `implementing`** and `--no-lock` was NOT passed: transition back to `planned` — you're picking new tasks now.
+  - Clear focus: `"${CLAUDE_PLUGIN_ROOT}/scripts/session.sh" . "${CLAUDE_SESSION_ID}" --clear-focus`
+  - Set phase: `"${CLAUDE_PLUGIN_ROOT}/scripts/session.sh" . "${CLAUDE_SESSION_ID}" --set-phase planned`
+  - This also handles `/rewind` scenarios where the conversation context no longer matches the on-disk state.
+- **If `--no-lock` was passed**: skip the phase transition. Useful for checking progress mid-implementation without leaving implementing phase.
 
 - Read the task file: `"${CLAUDE_PLUGIN_ROOT}/scripts/session.sh" . "${CLAUDE_SESSION_ID}" --get-task` → read `.flow/<filename>`
 - Read recent commits: `git log --oneline -20`

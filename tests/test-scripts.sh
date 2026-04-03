@@ -190,6 +190,12 @@ RESULT=$(echo '{"cwd":"'"$TEST_DIR"'","session_id":"s1","prompt":"hi"}' | "$SCRI
 assert_contains "implementing reminder" "implementing" "$RESULT"
 assert_contains "mentions next" "next" "$RESULT"
 
+echo "-- /flow: commands skip injection --"
+RESULT=$(echo '{"cwd":"'"$TEST_DIR"'","session_id":"s1","prompt":"/flow:next"}' | "$SCRIPT_DIR/phase-gate.sh")
+assert_json_empty "flow command = skip" "$RESULT"
+RESULT=$(echo '{"cwd":"'"$TEST_DIR"'","session_id":"s1","prompt":"/flow:implement"}' | "$SCRIPT_DIR/phase-gate.sh")
+assert_json_empty "flow implement = skip" "$RESULT"
+
 # ============================================================
 echo ""
 echo "=== phase-guard.sh ==="
