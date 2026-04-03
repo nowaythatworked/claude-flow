@@ -178,7 +178,7 @@ Branch detection is automatic — the `SessionStart` hook detects branched sessi
 | `/flow:init` | Initialize flow in current project (scaffold .flow/) |
 | `/flow:add-rule` | Add a new rule from a pattern you discovered |
 | `/flow:rules` | Show all active rules and their status |
-| `/flow:reload-rules` | Re-read all rules into context (use when rules get lost) |
+| `/flow:reload-rules` | Re-read all rules and re-evaluate dynamic rules (use when rules get lost) |
 
 ## Project Structure
 
