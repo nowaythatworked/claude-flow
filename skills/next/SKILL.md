@@ -12,17 +12,27 @@ Checkpoint and navigation skill. Analyzes the current state of the task, helps p
 
 ## Instructions
 
+> **Follow every step on every invocation, in order, without skipping.** It does not matter if this skill was called earlier in the conversation, or if the user already told you what they want to work on. Start from step 1 every time.
+
 ### 1. Orient & lock
 
-- Get state: `"${CLAUDE_PLUGIN_ROOT}/scripts/session.sh" . "${CLAUDE_SESSION_ID}" --get`
-  - If empty: no active workflow. Suggest `/flow:build`.
-  - If phase is `planning`: tell the user to finish planning first. Suggest `/flow:approve` when the plan is ready.
+Run this command now:
 
-- **If phase is `implementing`** and `--no-lock` was NOT passed: transition back to `planned` — you're picking new tasks now.
-  - Clear focus: `"${CLAUDE_PLUGIN_ROOT}/scripts/session.sh" . "${CLAUDE_SESSION_ID}" --clear-focus`
-  - Set phase: `"${CLAUDE_PLUGIN_ROOT}/scripts/session.sh" . "${CLAUDE_SESSION_ID}" --set-phase planned`
-  - This also handles `/rewind` scenarios where the conversation context no longer matches the on-disk state.
-- **If `--no-lock` was passed**: skip the phase transition. Useful for checking progress mid-implementation without leaving implementing phase.
+```
+"${CLAUDE_PLUGIN_ROOT}/scripts/session.sh" . "${CLAUDE_SESSION_ID}" --get
+```
+
+Handle the result:
+- **Empty**: no active workflow. Tell the user and suggest `/flow:build`. Stop here.
+- **`planning`**: tell the user to finish planning first and suggest `/flow:approve`. Stop here.
+- **`implementing`** and `--no-lock` was NOT passed: **you must lock before doing anything else.**
+  1. `"${CLAUDE_PLUGIN_ROOT}/scripts/session.sh" . "${CLAUDE_SESSION_ID}" --clear-focus`
+  2. `"${CLAUDE_PLUGIN_ROOT}/scripts/session.sh" . "${CLAUDE_SESSION_ID}" --set-phase planned`
+  3. Run `--get` again and confirm the output now starts with `planned`. If it does not, stop and tell the user the lock failed.
+  4. Tell the user: "Phase locked: **implementing → planned**."
+  - Note: a `flow-next-lock` hook may have already done this. If `--get` already returns `planned`, confirm that to the user and continue.
+- **`planned`**: already unlocked, no phase change needed. Continue.
+- **`--no-lock` was passed**: skip the lock. Tell the user: "Skipping lock (`--no-lock`). Phase remains: `implementing`." Continue.
 
 - Read the task file: `"${CLAUDE_PLUGIN_ROOT}/scripts/session.sh" . "${CLAUDE_SESSION_ID}" --get-task` → read `.flow/<filename>`
 - Read recent commits: `git log --oneline -20`
