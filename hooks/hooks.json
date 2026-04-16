@@ -11,16 +11,19 @@
         ]
       }
     ],
-    "UserPromptSubmit": [
+    "PreToolUse": [
       {
+        "matcher": "Write|Edit",
         "hooks": [
           {
             "type": "command",
-            "command": "${CLAUDE_PLUGIN_ROOT}/scripts/flow-next-lock.sh",
+            "command": "${CLAUDE_PLUGIN_ROOT}/scripts/phase-guard.sh",
             "timeout": 5
           }
         ]
-      },
+      }
+    ],
+    "UserPromptSubmit": [
       {
         "hooks": [
           {
@@ -55,22 +58,13 @@
         "hooks": [
           {
             "type": "command",
-            "command": "${CLAUDE_PLUGIN_ROOT}/scripts/phase-guard.sh",
-            "timeout": 5
-          }
-        ]
-      },
-      {
-        "matcher": "Write|Edit",
-        "hooks": [
-          {
-            "type": "command",
             "command": "${CLAUDE_PLUGIN_ROOT}/scripts/scan-quality.sh",
             "timeout": 5
           }
         ]
       },
       {
+        "matcher": "Write|Edit|Bash",
         "hooks": [
           {
             "type": "command",

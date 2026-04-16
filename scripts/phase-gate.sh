@@ -54,6 +54,7 @@ fi
 
 PHASE=$(echo "$ENTRY" | jq -r '.phase' 2>/dev/null || true)
 FOCUS=$(echo "$ENTRY" | jq -r '.focus // [] | if length > 0 then join(", ") else "" end' 2>/dev/null || true)
+TASK_FILE=$(echo "$ENTRY" | jq -r '.task_file // empty' 2>/dev/null || true)
 
 # --- Build phase reminder ---
 case "$PHASE" in
@@ -76,12 +77,34 @@ case "$PHASE" in
     ;;
 esac
 
+# --- Build session title ---
+# Derive from task filename + focus so it updates as work progresses
+SESSION_TITLE=""
+if [ -n "$TASK_FILE" ]; then
+  TASK_SLUG="${TASK_FILE%.md}"
+  if [ -n "$FOCUS" ]; then
+    SESSION_TITLE="flow: ${TASK_SLUG} | ${FOCUS}"
+  else
+    SESSION_TITLE="flow: ${TASK_SLUG}"
+  fi
+fi
+
 # --- Output ---
-jq -n --arg ctx "$CONTEXT" '{
-  hookSpecificOutput: {
-    hookEventName: "UserPromptSubmit",
-    additionalContext: $ctx
-  }
-}'
+if [ -n "$SESSION_TITLE" ]; then
+  jq -n --arg ctx "$CONTEXT" --arg title "$SESSION_TITLE" '{
+    hookSpecificOutput: {
+      hookEventName: "UserPromptSubmit",
+      additionalContext: $ctx,
+      sessionTitle: $title
+    }
+  }'
+else
+  jq -n --arg ctx "$CONTEXT" '{
+    hookSpecificOutput: {
+      hookEventName: "UserPromptSubmit",
+      additionalContext: $ctx
+    }
+  }'
+fi
 
 exit 0

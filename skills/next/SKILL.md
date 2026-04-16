@@ -2,6 +2,12 @@
 name: next
 description: "Analyze what's next, pick tasks, and deep-dive before implementation. The hub between planning and implementing."
 argument-hint: "[--no-lock]"
+hooks:
+  UserPromptSubmit:
+    - hooks:
+        - type: command
+          command: "${CLAUDE_PLUGIN_ROOT}/scripts/flow-next-lock.sh"
+          timeout: 5
 ---
 
 Invoked as `/flow:next [--no-lock]`.

@@ -1,6 +1,7 @@
 #!/bin/bash
-# PostToolUse hook for Write|Edit: warn on code writes during planning/planned phases.
+# PreToolUse hook for Write|Edit: BLOCK code writes during planning/planned phases.
 # Session-aware — only fires for sessions with an active planning or planned phase.
+# Exits with code 2 to block the tool call before it executes.
 # Pure bash + jq — no LLM calls.
 
 set -euo pipefail
@@ -57,18 +58,18 @@ case "$FILE_PATH" in
     ;;
 esac
 
-# --- Warn ---
+# --- Block ---
 if [ "$PHASE" = "planning" ]; then
-  WARNING="You wrote to \`${FILE_PATH}\` during **planning** phase. No code changes until the plan is approved. Re-read /flow:build rules."
+  REASON="Write to \`${FILE_PATH}\` blocked — you are in **planning** phase. No code changes until the plan is approved and the user runs /flow:approve."
 else
-  WARNING="You wrote to \`${FILE_PATH}\` during **planned** phase (deep-dive). No code changes until /flow:implement. Re-read /flow:next rules."
+  REASON="Write to \`${FILE_PATH}\` blocked — you are in **planned** phase (deep-dive). No code changes until the user runs /flow:implement."
 fi
 
-jq -n --arg ctx "$WARNING" '{
+jq -n --arg ctx "$REASON" '{
   hookSpecificOutput: {
-    hookEventName: "PostToolUse",
+    hookEventName: "PreToolUse",
     additionalContext: $ctx
   }
 }'
 
-exit 0
+exit 2
