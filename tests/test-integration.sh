@@ -290,10 +290,10 @@ if [ -n "$BUILD_SESSION" ]; then
     else
       FAIL=$((FAIL + 1)); echo "  ✗ no archived task file in folder"
     fi
-    if [ -f "${ARCHIVE_FOLDER}session.json" ]; then
-      PASS=$((PASS + 1)); echo "  ✓ session.json archived"
+    if [ -f "${ARCHIVE_FOLDER}sessions.json" ]; then
+      PASS=$((PASS + 1)); echo "  ✓ sessions.json archived"
     else
-      FAIL=$((FAIL + 1)); echo "  ✗ no session.json in archive folder"
+      FAIL=$((FAIL + 1)); echo "  ✗ no sessions.json in archive folder"
     fi
   else
     FAIL=$((FAIL + 1)); echo "  ✗ no archive folder created"

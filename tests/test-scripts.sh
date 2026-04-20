@@ -217,13 +217,13 @@ setup
 printf "# My Task\n- [x] Done\n" > "$TEST_DIR/.flow/my-task.md"
 "$SCRIPT_DIR/reset.sh" --session s1 "$TEST_DIR" > /dev/null
 assert_file_exists "archived in folder" "$TEST_DIR/.flow/archive/my-task/my-task.md"
-assert_file_exists "session.json created" "$TEST_DIR/.flow/archive/my-task/session.json"
+assert_file_exists "sessions.json created" "$TEST_DIR/.flow/archive/my-task/sessions.json"
 assert_file_not_exists "original removed" "$TEST_DIR/.flow/my-task.md"
 assert_empty "session removed" "$("$SCRIPT_DIR/session.sh" "$TEST_DIR" s1 --get)"
-# Verify session.json contains session_id and archived_at
-SESSION_ID_IN_JSON=$(jq -r '.session_id' "$TEST_DIR/.flow/archive/my-task/session.json")
-assert_eq "session_id in json" "s1" "$SESSION_ID_IN_JSON"
-ARCHIVED_AT=$(jq -r '.archived_at' "$TEST_DIR/.flow/archive/my-task/session.json")
+# Verify sessions.json contains keyed session entry with archived_at
+S1_PHASE=$(jq -r '.s1.phase' "$TEST_DIR/.flow/archive/my-task/sessions.json")
+assert_eq "s1 phase in json" "planning" "$S1_PHASE"
+ARCHIVED_AT=$(jq -r '.s1.archived_at' "$TEST_DIR/.flow/archive/my-task/sessions.json")
 assert_not_empty "archived_at present" "$ARCHIVED_AT"
 
 echo "-- archive collision --"
@@ -258,6 +258,39 @@ printf "# Task 2\n" > "$TEST_DIR/.flow/task2.md"
 "$SCRIPT_DIR/reset.sh" --session s1 "$TEST_DIR" > /dev/null
 assert_eq "s2 untouched" "implementing task2.md" "$("$SCRIPT_DIR/session.sh" "$TEST_DIR" s2 --get)"
 assert_file_exists "task2 still exists" "$TEST_DIR/.flow/task2.md"
+
+echo "-- shared task file: all sessions archived --"
+setup
+"$SCRIPT_DIR/session.sh" "$TEST_DIR" s1 --set implementing shared.md
+"$SCRIPT_DIR/session.sh" "$TEST_DIR" s2 --set implementing shared.md
+"$SCRIPT_DIR/session.sh" "$TEST_DIR" s2 --set-parent s1
+printf "# Shared Task\n" > "$TEST_DIR/.flow/shared.md"
+"$SCRIPT_DIR/reset.sh" --session s1 "$TEST_DIR" > /dev/null
+assert_file_exists "task file archived" "$TEST_DIR/.flow/archive/shared/shared.md"
+assert_file_exists "sessions.json created" "$TEST_DIR/.flow/archive/shared/sessions.json"
+# Both sessions in archive
+S1_IN_ARCHIVE=$(jq -r '.s1.phase' "$TEST_DIR/.flow/archive/shared/sessions.json")
+assert_eq "s1 in archive" "implementing" "$S1_IN_ARCHIVE"
+S2_IN_ARCHIVE=$(jq -r '.s2.phase' "$TEST_DIR/.flow/archive/shared/sessions.json")
+assert_eq "s2 in archive" "implementing" "$S2_IN_ARCHIVE"
+S2_PARENT=$(jq -r '.s2.parent' "$TEST_DIR/.flow/archive/shared/sessions.json")
+assert_eq "s2 parent preserved" "s1" "$S2_PARENT"
+# Both removed from SESSIONS.json
+assert_empty "s1 removed" "$("$SCRIPT_DIR/session.sh" "$TEST_DIR" s1 --get)"
+assert_empty "s2 removed" "$("$SCRIPT_DIR/session.sh" "$TEST_DIR" s2 --get)"
+
+echo "-- auto-commit after archive --"
+setup
+# Init a git repo so auto-commit works
+git init "$TEST_DIR" --quiet
+printf "" > "$TEST_DIR/.flow/.gitkeep"
+git -C "$TEST_DIR" add .flow/ && git -C "$TEST_DIR" commit -m "init" --quiet
+"$SCRIPT_DIR/session.sh" "$TEST_DIR" s1 --set planning commit-test.md
+printf "# Commit Test\n" > "$TEST_DIR/.flow/commit-test.md"
+git -C "$TEST_DIR" add .flow/ && git -C "$TEST_DIR" commit -m "add task" --quiet
+"$SCRIPT_DIR/reset.sh" --session s1 "$TEST_DIR" > /dev/null
+LAST_MSG=$(git -C "$TEST_DIR" log --oneline -1 --format="%s")
+assert_eq "auto-commit message" "chore: archive commit-test" "$LAST_MSG"
 
 # ============================================================
 # Cleanup & Report
