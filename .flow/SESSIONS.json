@@ -1,0 +1,14 @@
+{
+  "860d7518-74f5-4bdd-99d7-f1c1a5deb188": {
+    "phase": "planning",
+    "task_file": "fix-session-naming.md",
+    "focus": [],
+    "parent": null
+  },
+  "81417072-ce79-426e-b91d-5d092a95db7f": {
+    "phase": "planning",
+    "task_file": "fix-parallel-session-tracking.md",
+    "focus": [],
+    "parent": null
+  }
+}

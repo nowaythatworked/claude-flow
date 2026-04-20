@@ -1,0 +1,13 @@
+{
+  "5229a971-886b-41e9-9954-c1f8bdf7cb91": {
+    "phase": "implementing",
+    "task_file": "fix-reset-orphan-bug.md",
+    "focus": [
+      "reset.sh — archive all sibling sessions together",
+      "tests/test-scripts.sh — update existing + add shared-file tests",
+      "tests/test-integration.sh — filename update"
+    ],
+    "parent": null,
+    "archived_at": "2026-04-20T16:02:35Z"
+  }
+}
