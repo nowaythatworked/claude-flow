@@ -75,6 +75,28 @@ assert_empty() {
   fi
 }
 
+assert_not_empty() {
+  local label="$1" actual="$2"
+  if [ -n "$actual" ]; then
+    PASS=$((PASS + 1))
+    echo "  ✓ $label"
+  else
+    FAIL=$((FAIL + 1))
+    echo "  ✗ $label (expected non-empty, got empty)"
+  fi
+}
+
+assert_dir_not_exists() {
+  local label="$1" path="$2"
+  if [ ! -d "$path" ]; then
+    PASS=$((PASS + 1))
+    echo "  ✓ $label"
+  else
+    FAIL=$((FAIL + 1))
+    echo "  ✗ $label (directory exists: $path)"
+  fi
+}
+
 assert_json_empty() {
   local label="$1" actual="$2"
   if [ "$actual" = "{}" ] || [ -z "$actual" ]; then
@@ -288,15 +310,21 @@ setup
 "$SCRIPT_DIR/session.sh" "$TEST_DIR" s1 --set planning my-task.md
 printf "# My Task\n- [x] Done\n" > "$TEST_DIR/.flow/my-task.md"
 "$SCRIPT_DIR/reset.sh" --session s1 "$TEST_DIR" > /dev/null
-assert_file_exists "archived" "$TEST_DIR/.flow/archive/my-task.md"
+assert_file_exists "archived in folder" "$TEST_DIR/.flow/archive/my-task/my-task.md"
+assert_file_exists "session.json created" "$TEST_DIR/.flow/archive/my-task/session.json"
 assert_file_not_exists "original removed" "$TEST_DIR/.flow/my-task.md"
 assert_empty "session removed" "$("$SCRIPT_DIR/session.sh" "$TEST_DIR" s1 --get)"
+# Verify session.json contains session_id and archived_at
+SESSION_ID_IN_JSON=$(jq -r '.session_id' "$TEST_DIR/.flow/archive/my-task/session.json")
+assert_eq "session_id in json" "s1" "$SESSION_ID_IN_JSON"
+ARCHIVED_AT=$(jq -r '.archived_at' "$TEST_DIR/.flow/archive/my-task/session.json")
+assert_not_empty "archived_at present" "$ARCHIVED_AT"
 
 echo "-- archive collision --"
 "$SCRIPT_DIR/session.sh" "$TEST_DIR" s2 --set planning my-task.md
 printf "# Round 2\n" > "$TEST_DIR/.flow/my-task.md"
 "$SCRIPT_DIR/reset.sh" --session s2 "$TEST_DIR" > /dev/null
-ARCHIVED=$(ls "$TEST_DIR/.flow/archive/" | grep "my-task" | wc -l | tr -d ' ')
+ARCHIVED=$(ls -d "$TEST_DIR/.flow/archive/my-task"* | wc -l | tr -d ' ')
 assert_eq "two archived versions" "2" "$ARCHIVED"
 
 echo "-- delete --"
@@ -305,7 +333,7 @@ setup
 printf "# Task\n" > "$TEST_DIR/.flow/task.md"
 "$SCRIPT_DIR/reset.sh" --delete --session s1 "$TEST_DIR" > /dev/null
 assert_file_not_exists "deleted" "$TEST_DIR/.flow/task.md"
-assert_file_not_exists "not archived" "$TEST_DIR/.flow/archive/task.md"
+assert_dir_not_exists "not archived" "$TEST_DIR/.flow/archive/task"
 
 echo "-- phase-only --"
 setup

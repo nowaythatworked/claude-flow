@@ -282,11 +282,21 @@ echo "=== Test 12: /flow:reset archives + cleans up ==="
 # ============================================================
 if [ -n "$BUILD_SESSION" ]; then
   RESULT=$(resume_prompt "$BUILD_SESSION" 'Run /flow:reset -y')
-  ARCHIVED=$(ls "$TEST_PROJECT/.flow/archive/"*.md 2>/dev/null | head -1)
-  if [ -n "$ARCHIVED" ]; then
-    PASS=$((PASS + 1)); echo "  ✓ task file archived: $(basename "$ARCHIVED")"
+  ARCHIVE_FOLDER=$(ls -d "$TEST_PROJECT/.flow/archive/"*/ 2>/dev/null | head -1)
+  if [ -n "$ARCHIVE_FOLDER" ]; then
+    ARCHIVED=$(ls "$ARCHIVE_FOLDER"*.md 2>/dev/null | head -1)
+    if [ -n "$ARCHIVED" ]; then
+      PASS=$((PASS + 1)); echo "  ✓ task file archived: $(basename "$ARCHIVED")"
+    else
+      FAIL=$((FAIL + 1)); echo "  ✗ no archived task file in folder"
+    fi
+    if [ -f "${ARCHIVE_FOLDER}session.json" ]; then
+      PASS=$((PASS + 1)); echo "  ✓ session.json archived"
+    else
+      FAIL=$((FAIL + 1)); echo "  ✗ no session.json in archive folder"
+    fi
   else
-    FAIL=$((FAIL + 1)); echo "  ✗ no archived task file"
+    FAIL=$((FAIL + 1)); echo "  ✗ no archive folder created"
   fi
   if [ -f "$TEST_PROJECT/.flow/SESSIONS.json" ] && jq -e --arg id "$BUILD_SESSION" '.[$id]' "$TEST_PROJECT/.flow/SESSIONS.json" &>/dev/null; then
     FAIL=$((FAIL + 1)); echo "  ✗ session still in SESSIONS.json"

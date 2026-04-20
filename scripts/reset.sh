@@ -40,45 +40,57 @@ if [ -z "$SESSION_ID" ]; then
   exit 1
 fi
 
-# --- Resolve task file from session ---
+# --- Resolve task file and capture session JSON ---
 TASK_NAME=$("$SCRIPT_DIR/session.sh" "$CWD" "$SESSION_ID" --get-task)
+SESSION_JSON=$("$SCRIPT_DIR/session.sh" "$CWD" "$SESSION_ID" --get-json)
 TASK_FILE=""
 if [ -n "$TASK_NAME" ] && [ -f "$FLOW_DIR/$TASK_NAME" ]; then
   TASK_FILE="$FLOW_DIR/$TASK_NAME"
 fi
 
-# --- Remove session entry ---
-"$SCRIPT_DIR/session.sh" "$CWD" "$SESSION_ID" --remove
-echo "Removed session entry"
-
 # --- Handle task file ---
 if [ "$MODE" = "phase-only" ]; then
+  "$SCRIPT_DIR/session.sh" "$CWD" "$SESSION_ID" --remove
+  echo "Removed session entry"
   echo "Phase-only reset — task file unchanged"
   exit 0
 fi
 
 if [ -z "$TASK_FILE" ]; then
+  "$SCRIPT_DIR/session.sh" "$CWD" "$SESSION_ID" --remove
+  echo "Removed session entry"
   echo "No active task file to reset"
   exit 0
 fi
 
 TASK_BASENAME=$(basename "$TASK_FILE")
+NAME_NO_EXT="${TASK_BASENAME%.md}"
 
 if [ "$MODE" = "archive" ]; then
   ARCHIVE_DIR="$FLOW_DIR/archive"
-  mkdir -p "$ARCHIVE_DIR"
-  ARCHIVE_PATH="$ARCHIVE_DIR/$TASK_BASENAME"
-  if [ -f "$ARCHIVE_PATH" ]; then
+  ARCHIVE_FOLDER="$ARCHIVE_DIR/$NAME_NO_EXT"
+  if [ -d "$ARCHIVE_FOLDER" ]; then
     TIMESTAMP=$(date +%Y%m%d-%H%M%S)
-    NAME_NO_EXT="${TASK_BASENAME%.md}"
-    ARCHIVE_PATH="$ARCHIVE_DIR/${NAME_NO_EXT}-${TIMESTAMP}.md"
+    ARCHIVE_FOLDER="$ARCHIVE_DIR/${NAME_NO_EXT}-${TIMESTAMP}"
   fi
-  mv "$TASK_FILE" "$ARCHIVE_PATH"
-  echo "Archived → .flow/archive/$(basename "$ARCHIVE_PATH")"
+  mkdir -p "$ARCHIVE_FOLDER"
+  mv "$TASK_FILE" "$ARCHIVE_FOLDER/$TASK_BASENAME"
+  # Write session.json with session ID and archived timestamp
+  if [ -n "$SESSION_JSON" ]; then
+    ARCHIVED_AT=$(date -u +%Y-%m-%dT%H:%M:%SZ)
+    echo "$SESSION_JSON" | jq --arg sid "$SESSION_ID" --arg at "$ARCHIVED_AT" \
+      '. + {"session_id": $sid, "archived_at": $at}' \
+      > "$ARCHIVE_FOLDER/session.json"
+  fi
+  echo "Archived → .flow/archive/$(basename "$ARCHIVE_FOLDER")/"
 elif [ "$MODE" = "delete" ]; then
   rm "$TASK_FILE"
   echo "Deleted $TASK_BASENAME"
 fi
+
+# --- Remove session entry ---
+"$SCRIPT_DIR/session.sh" "$CWD" "$SESSION_ID" --remove
+echo "Removed session entry"
 
 echo ""
 echo "Reset complete."
