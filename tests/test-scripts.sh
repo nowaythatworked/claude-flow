@@ -7,106 +7,8 @@ set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "$0")/../scripts" && pwd)"
 TEST_DIR=$(mktemp -d)
-PASS=0
-FAIL=0
 
-# --- Helpers ---
-setup() {
-  rm -rf "$TEST_DIR"
-  mkdir -p "$TEST_DIR/.flow"
-}
-
-assert_eq() {
-  local label="$1" expected="$2" actual="$3"
-  if [ "$expected" = "$actual" ]; then
-    PASS=$((PASS + 1))
-    echo "  ✓ $label"
-  else
-    FAIL=$((FAIL + 1))
-    echo "  ✗ $label"
-    echo "    expected: $expected"
-    echo "    actual:   $actual"
-  fi
-}
-
-assert_file_exists() {
-  local label="$1" path="$2"
-  if [ -f "$path" ]; then
-    PASS=$((PASS + 1))
-    echo "  ✓ $label"
-  else
-    FAIL=$((FAIL + 1))
-    echo "  ✗ $label (file not found: $path)"
-  fi
-}
-
-assert_file_not_exists() {
-  local label="$1" path="$2"
-  if [ ! -f "$path" ]; then
-    PASS=$((PASS + 1))
-    echo "  ✓ $label"
-  else
-    FAIL=$((FAIL + 1))
-    echo "  ✗ $label (file should not exist: $path)"
-  fi
-}
-
-assert_contains() {
-  local label="$1" expected="$2" actual="$3"
-  if echo "$actual" | grep -q "$expected"; then
-    PASS=$((PASS + 1))
-    echo "  ✓ $label"
-  else
-    FAIL=$((FAIL + 1))
-    echo "  ✗ $label"
-    echo "    expected to contain: $expected"
-    echo "    actual: $actual"
-  fi
-}
-
-assert_empty() {
-  local label="$1" actual="$2"
-  if [ -z "$actual" ]; then
-    PASS=$((PASS + 1))
-    echo "  ✓ $label"
-  else
-    FAIL=$((FAIL + 1))
-    echo "  ✗ $label (expected empty, got: $actual)"
-  fi
-}
-
-assert_not_empty() {
-  local label="$1" actual="$2"
-  if [ -n "$actual" ]; then
-    PASS=$((PASS + 1))
-    echo "  ✓ $label"
-  else
-    FAIL=$((FAIL + 1))
-    echo "  ✗ $label (expected non-empty, got empty)"
-  fi
-}
-
-assert_dir_not_exists() {
-  local label="$1" path="$2"
-  if [ ! -d "$path" ]; then
-    PASS=$((PASS + 1))
-    echo "  ✓ $label"
-  else
-    FAIL=$((FAIL + 1))
-    echo "  ✗ $label (directory exists: $path)"
-  fi
-}
-
-assert_json_empty() {
-  local label="$1" actual="$2"
-  if [ "$actual" = "{}" ] || [ -z "$actual" ]; then
-    PASS=$((PASS + 1))
-    echo "  ✓ $label"
-  else
-    FAIL=$((FAIL + 1))
-    echo "  ✗ $label (expected {}, got: $actual)"
-  fi
-}
+source "$(dirname "$0")/helpers.sh"
 
 # ============================================================
 echo "=== session.sh ==="
@@ -226,12 +128,16 @@ echo "=== phase-guard.sh ==="
 echo "-- planning: write outside .flow/ --"
 setup
 "$SCRIPT_DIR/session.sh" "$TEST_DIR" s1 --set planning task.md
-RESULT=$(echo '{"cwd":"'"$TEST_DIR"'","session_id":"s1","tool_input":{"file_path":"'"$TEST_DIR"'/src/app.ts"}}' | "$SCRIPT_DIR/phase-guard.sh")
+EXIT_CODE=0
+RESULT=$(echo '{"cwd":"'"$TEST_DIR"'","session_id":"s1","tool_input":{"file_path":"'"$TEST_DIR"'/src/app.ts"}}' | "$SCRIPT_DIR/phase-guard.sh") || EXIT_CODE=$?
+assert_eq "blocks with exit code 2 (planning)" "2" "$EXIT_CODE"
 assert_contains "warns on code write (planning)" "planning" "$RESULT"
 
 echo "-- planned: write outside .flow/ --"
 "$SCRIPT_DIR/session.sh" "$TEST_DIR" s1 --set-phase planned
-RESULT=$(echo '{"cwd":"'"$TEST_DIR"'","session_id":"s1","tool_input":{"file_path":"'"$TEST_DIR"'/src/app.ts"}}' | "$SCRIPT_DIR/phase-guard.sh")
+EXIT_CODE=0
+RESULT=$(echo '{"cwd":"'"$TEST_DIR"'","session_id":"s1","tool_input":{"file_path":"'"$TEST_DIR"'/src/app.ts"}}' | "$SCRIPT_DIR/phase-guard.sh") || EXIT_CODE=$?
+assert_eq "blocks with exit code 2 (planned)" "2" "$EXIT_CODE"
 assert_contains "warns on code write (planned)" "planned" "$RESULT"
 
 echo "-- planning: write inside .flow/ --"
@@ -358,11 +264,4 @@ assert_file_exists "task2 still exists" "$TEST_DIR/.flow/task2.md"
 # ============================================================
 rm -rf "$TEST_DIR"
 
-echo ""
-echo "================================"
-echo "Results: $PASS passed, $FAIL failed"
-echo "================================"
-
-if [ "$FAIL" -gt 0 ]; then
-  exit 1
-fi
+report
