@@ -1,0 +1,12 @@
+{
+  "phase": "implementing",
+  "task_file": "archive-sessions-with-plan.md",
+  "focus": [
+    "Restructure archive format",
+    "Capture and archive session entry",
+    "Update output"
+  ],
+  "parent": null,
+  "session_id": "4ea1a656-a4c7-4586-b85f-015abad59445",
+  "archived_at": "2026-04-20T12:31:24Z"
+}
