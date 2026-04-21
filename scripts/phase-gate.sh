@@ -57,9 +57,11 @@ PHASE=$(echo "$ENTRY" | jq -r '.phase' 2>/dev/null || true)
 FOCUS=$(echo "$ENTRY" | jq -r '.focus // [] | if length > 0 then join(", ") else "" end' 2>/dev/null || true)
 TASK_FILE=$(echo "$ENTRY" | jq -r '.task_file // empty' 2>/dev/null || true)
 
+SESSION_HINT="CURRENT_SESSION_ID=${SESSION_ID} — use in all session.sh commands."
+
 # --- Build phase reminder ---
 if [ "$IS_FLOW_COMMAND" = true ]; then
-  CONTEXT=""
+  CONTEXT="$SESSION_HINT"
   # For /flow: commands, still validate the phase exists
   case "$PHASE" in
     planning|planned|implementing) ;;
@@ -71,17 +73,21 @@ if [ "$IS_FLOW_COMMAND" = true ]; then
 else
   case "$PHASE" in
     planning)
-      CONTEXT="**Phase: planning.** Follow /flow:build planning rules — understand deeply, plan in conversation. No code writes. Keep questioning yourself: Do you understand enough? Have you searched for side-effects, affected areas, and new possibilities? Is the plan solid enough to approve? If not, keep iterating. When genuinely confident, suggest the user runs /flow:approve."
+      CONTEXT="${SESSION_HINT}
+**Phase: planning.** Follow /flow:build planning rules — understand deeply, plan in conversation. No code writes. Keep questioning yourself: Do you understand enough? Have you searched for side-effects, affected areas, and new possibilities? Is the plan solid enough to approve? If not, keep iterating. When genuinely confident, suggest the user runs /flow:approve."
       ;;
     planned)
       if [ -n "$FOCUS" ]; then
-        CONTEXT="**Phase: planned | Focus: ${FOCUS}.** Follow /flow:next deep-dive rules — research thoroughly, think through edge cases. No code writes. Keep iterating: ask yourself if you are confident enough to implement this correctly. If not, dig deeper or ask. When confident, suggest the user runs /flow:implement."
+        CONTEXT="${SESSION_HINT}
+**Phase: planned | Focus: ${FOCUS}.** Follow /flow:next deep-dive rules — research thoroughly, think through edge cases. No code writes. Keep iterating: ask yourself if you are confident enough to implement this correctly. If not, dig deeper or ask. When confident, suggest the user runs /flow:implement."
       else
-        CONTEXT="**Phase: planned.** Follow /flow:build planned-phase rules. Suggest the user runs /flow:next or tells you which tasks to focus on. Deep-dive before implementing."
+        CONTEXT="${SESSION_HINT}
+**Phase: planned.** Follow /flow:build planned-phase rules. Suggest the user runs /flow:next or tells you which tasks to focus on. Deep-dive before implementing."
       fi
       ;;
     implementing)
-      CONTEXT="**Phase: implementing.** Follow /flow:build implementation rules — delegate substantial work, verify results. When tasks are complete, suggest the user runs /flow:next for the next task."
+      CONTEXT="${SESSION_HINT}
+**Phase: implementing.** Follow /flow:build implementation rules — delegate substantial work, verify results. When tasks are complete, suggest the user runs /flow:next for the next task."
       ;;
     *)
       echo '{}'

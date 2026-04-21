@@ -25,22 +25,22 @@ Checkpoint and navigation skill. Analyzes the current state of the task, helps p
 Run this command now:
 
 ```
-"${CLAUDE_PLUGIN_ROOT}/scripts/session.sh" . "${CLAUDE_SESSION_ID}" --get
+"${CLAUDE_PLUGIN_ROOT}/scripts/session.sh" . "$CURRENT_SESSION_ID" --get
 ```
 
 Handle the result:
 - **Empty**: no active workflow. Tell the user and suggest `/flow:build`. Stop here.
 - **`planning`**: tell the user to finish planning first and suggest `/flow:approve`. Stop here.
 - **`implementing`** and `--no-lock` was NOT passed: **you must lock before doing anything else.**
-  1. `"${CLAUDE_PLUGIN_ROOT}/scripts/session.sh" . "${CLAUDE_SESSION_ID}" --clear-focus`
-  2. `"${CLAUDE_PLUGIN_ROOT}/scripts/session.sh" . "${CLAUDE_SESSION_ID}" --set-phase planned`
+  1. `"${CLAUDE_PLUGIN_ROOT}/scripts/session.sh" . "$CURRENT_SESSION_ID" --clear-focus`
+  2. `"${CLAUDE_PLUGIN_ROOT}/scripts/session.sh" . "$CURRENT_SESSION_ID" --set-phase planned`
   3. Run `--get` again and confirm the output now starts with `planned`. If it does not, stop and tell the user the lock failed.
   4. Tell the user: "Phase locked: **implementing → planned**."
   - Note: a `flow-next-lock` hook may have already done this. If `--get` already returns `planned`, confirm that to the user and continue.
 - **`planned`**: already unlocked, no phase change needed. Continue.
 - **`--no-lock` was passed**: skip the lock. Tell the user: "Skipping lock (`--no-lock`). Phase remains: `implementing`." Continue.
 
-- Read the task file: `"${CLAUDE_PLUGIN_ROOT}/scripts/session.sh" . "${CLAUDE_SESSION_ID}" --get-task` → read `.flow/<filename>`
+- Read the task file: `"${CLAUDE_PLUGIN_ROOT}/scripts/session.sh" . "$CURRENT_SESSION_ID" --get-task` → read `.flow/<filename>`
 - Read recent commits: `git log --oneline -20`
 - Check other session entries: `"${CLAUDE_PLUGIN_ROOT}/scripts/session.sh" . --dump` — entries persist until the user runs `/flow:reset`; they are not "stale" or "orphaned" just because their work is done. Only use the focus fields to check for active task conflicts — do not suggest cleaning up, removing, or commenting on other entries.
 
@@ -68,7 +68,7 @@ Present analysis to the user:
 ### 4. Set focus
 
 Once the user confirms task selection:
-- Set focus: `"${CLAUDE_PLUGIN_ROOT}/scripts/session.sh" . "${CLAUDE_SESSION_ID}" --set-focus "<task-1>" "<task-2>"`
+- Set focus: `"${CLAUDE_PLUGIN_ROOT}/scripts/session.sh" . "$CURRENT_SESSION_ID" --set-focus "<task-1>" "<task-2>"`
 - Tasks are identified by their heading or description from the plan
 
 ### 5. Deep-dive

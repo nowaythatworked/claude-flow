@@ -15,7 +15,7 @@ Invoked as `/flow:reset [flags]`.
 
 ## Instructions
 
-1. Get state: `"${CLAUDE_PLUGIN_ROOT}/scripts/session.sh" . "${CLAUDE_SESSION_ID}" --get`
+1. Get state: `"${CLAUDE_PLUGIN_ROOT}/scripts/session.sh" . "$CURRENT_SESSION_ID" --get`
    - If empty, tell the user there's nothing to reset.
    - Otherwise read the task file for a summary.
 
@@ -26,7 +26,7 @@ Invoked as `/flow:reset [flags]`.
 
 3. Run the reset script:
    ```bash
-   "${CLAUDE_PLUGIN_ROOT}/scripts/reset.sh" [--archive|--delete|--phase-only] --session "${CLAUDE_SESSION_ID}" .
+   "${CLAUDE_PLUGIN_ROOT}/scripts/reset.sh" [--archive|--delete|--phase-only] --session "$CURRENT_SESSION_ID" .
    ```
 
 4. Report what was done.

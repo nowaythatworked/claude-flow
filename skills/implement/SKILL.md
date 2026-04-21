@@ -13,17 +13,17 @@ Transitions from **planned** to **implementing** for the focused tasks. Unlocks 
 
 ### 1. Validate
 
-- Get state: `"${CLAUDE_PLUGIN_ROOT}/scripts/session.sh" . "${CLAUDE_SESSION_ID}" --get`
+- Get state: `"${CLAUDE_PLUGIN_ROOT}/scripts/session.sh" . "$CURRENT_SESSION_ID" --get`
   - If empty: no active workflow. Suggest `/flow:build`.
   - If phase is `planning`: tell the user to approve the plan first (`/flow:approve`).
   - If phase is `implementing`: already implementing. Show current focus and continue.
 
-- Get focus: `"${CLAUDE_PLUGIN_ROOT}/scripts/session.sh" . "${CLAUDE_SESSION_ID}" --get-focus`
+- Get focus: `"${CLAUDE_PLUGIN_ROOT}/scripts/session.sh" . "$CURRENT_SESSION_ID" --get-focus`
   - If empty: tell the user to run `/flow:next` first to pick tasks and deep-dive.
 
 ### 2. Transition
 
-- Set phase: `"${CLAUDE_PLUGIN_ROOT}/scripts/session.sh" . "${CLAUDE_SESSION_ID}" --set-phase implementing`
+- Set phase: `"${CLAUDE_PLUGIN_ROOT}/scripts/session.sh" . "$CURRENT_SESSION_ID" --set-phase implementing`
 - Confirm: "Implementation unlocked for: [focused tasks]. Code writes are now allowed."
 
 ### 3. Create granular tasks

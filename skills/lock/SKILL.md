@@ -22,19 +22,19 @@ Steps the workflow back one phase. Use when:
 
 ## Instructions
 
-1. Get state: `"${CLAUDE_PLUGIN_ROOT}/scripts/session.sh" . "${CLAUDE_SESSION_ID}" --get`
+1. Get state: `"${CLAUDE_PLUGIN_ROOT}/scripts/session.sh" . "$CURRENT_SESSION_ID" --get`
    - If empty: no active workflow. Suggest `/flow:build`.
 
 2. Determine transition based on current phase:
 
    **From `implementing`:**
-   - Clear focus: `"${CLAUDE_PLUGIN_ROOT}/scripts/session.sh" . "${CLAUDE_SESSION_ID}" --clear-focus`
-   - Set phase: `"${CLAUDE_PLUGIN_ROOT}/scripts/session.sh" . "${CLAUDE_SESSION_ID}" --set-phase planned`
+   - Clear focus: `"${CLAUDE_PLUGIN_ROOT}/scripts/session.sh" . "$CURRENT_SESSION_ID" --clear-focus`
+   - Set phase: `"${CLAUDE_PLUGIN_ROOT}/scripts/session.sh" . "$CURRENT_SESSION_ID" --set-phase planned`
    - Confirm: "Back to planned phase. Code writes locked. Run `/flow:next` to pick tasks and deep-dive again."
 
    **From `planned`:**
-   - Clear focus: `"${CLAUDE_PLUGIN_ROOT}/scripts/session.sh" . "${CLAUDE_SESSION_ID}" --clear-focus`
-   - Set phase: `"${CLAUDE_PLUGIN_ROOT}/scripts/session.sh" . "${CLAUDE_SESSION_ID}" --set-phase planning`
+   - Clear focus: `"${CLAUDE_PLUGIN_ROOT}/scripts/session.sh" . "$CURRENT_SESSION_ID" --clear-focus`
+   - Set phase: `"${CLAUDE_PLUGIN_ROOT}/scripts/session.sh" . "$CURRENT_SESSION_ID" --set-phase planning`
    - Confirm: "Back to planning phase. The task file is kept for reference. Discuss revisions in conversation, then `/flow:approve` when ready."
 
    **From `planning`:**
