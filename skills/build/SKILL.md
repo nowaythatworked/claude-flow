@@ -48,13 +48,7 @@ Search the codebase for ripple effects of the planned changes:
 
 Surface anything relevant to the user. This is not optional — a plan without impact analysis is incomplete.
 
-### 4. Reflect on scope
-
-- Is this a small task (one area, straightforward) or a large task (multiple areas, complex)?
-- For large tasks: suggest the user whether to split into separate `/flow:build` sessions or handle in one
-- For small tasks: note that deep-dive can be brief since the planning already covers it
-
-### 5. Self-check & iterate
+### 4. Self-check & iterate
 
 Keep questioning yourself throughout planning — not just once at the end:
 
@@ -64,7 +58,7 @@ Keep questioning yourself throughout planning — not just once at the end:
 
 If the answer to any is no — go back: research more, search the codebase, ask questions, refine. Iterate until you're genuinely confident. The user may also push back and ask you to go deeper — follow their lead.
 
-### 6. Present & wait
+### 5. Present & wait
 
 - Present the finalized plan clearly
 - **Do NOT write anything to files. Do NOT implement.**

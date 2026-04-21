@@ -114,11 +114,13 @@ RESULT=$(echo '{"cwd":"'"$TEST_DIR"'","session_id":"s1","prompt":"hi"}' | "$SCRI
 assert_contains "implementing reminder" "implementing" "$RESULT"
 assert_contains "mentions next" "next" "$RESULT"
 
-echo "-- /flow: commands skip injection --"
+echo "-- /flow: commands set sessionTitle but skip additionalContext --"
 RESULT=$(echo '{"cwd":"'"$TEST_DIR"'","session_id":"s1","prompt":"/flow:next"}' | "$SCRIPT_DIR/phase-gate.sh")
-assert_json_empty "flow command = skip" "$RESULT"
+assert_contains "flow:next sets sessionTitle" "sessionTitle" "$RESULT"
+assert_not_contains "flow:next skips additionalContext" "additionalContext" "$RESULT"
 RESULT=$(echo '{"cwd":"'"$TEST_DIR"'","session_id":"s1","prompt":"/flow:implement"}' | "$SCRIPT_DIR/phase-gate.sh")
-assert_json_empty "flow implement = skip" "$RESULT"
+assert_contains "flow:implement sets sessionTitle" "sessionTitle" "$RESULT"
+assert_not_contains "flow:implement skips additionalContext" "additionalContext" "$RESULT"
 
 # ============================================================
 echo ""

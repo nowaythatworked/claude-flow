@@ -32,9 +32,10 @@ if [ -z "$CWD" ] || [ -z "$SESSION_ID" ]; then
   exit 0
 fi
 
-# Skip injection for /flow: commands — they manage their own state
+# Flag /flow: commands — they skip phase reminders but still get sessionTitle
+IS_FLOW_COMMAND=false
 case "$PROMPT" in
-  /flow:*) echo '{}'; exit 0 ;;
+  /flow:*) IS_FLOW_COMMAND=true ;;
 esac
 
 SESSIONS_FILE="${CWD}/.flow/SESSIONS.json"
@@ -57,25 +58,37 @@ FOCUS=$(echo "$ENTRY" | jq -r '.focus // [] | if length > 0 then join(", ") else
 TASK_FILE=$(echo "$ENTRY" | jq -r '.task_file // empty' 2>/dev/null || true)
 
 # --- Build phase reminder ---
-case "$PHASE" in
-  planning)
-    CONTEXT="**Phase: planning.** Follow /flow:build planning rules — understand deeply, plan in conversation. No code writes. Keep questioning yourself: Do you understand enough? Have you searched for side-effects, affected areas, and new possibilities? Is the plan solid enough to approve? If not, keep iterating. When genuinely confident, suggest the user runs /flow:approve."
-    ;;
-  planned)
-    if [ -n "$FOCUS" ]; then
-      CONTEXT="**Phase: planned | Focus: ${FOCUS}.** Follow /flow:next deep-dive rules — research thoroughly, think through edge cases. No code writes. Keep iterating: ask yourself if you are confident enough to implement this correctly. If not, dig deeper or ask. When confident, suggest the user runs /flow:implement."
-    else
-      CONTEXT="**Phase: planned.** Follow /flow:build planned-phase rules. Suggest the user runs /flow:next or tells you which tasks to focus on. Deep-dive before implementing."
-    fi
-    ;;
-  implementing)
-    CONTEXT="**Phase: implementing.** Follow /flow:build implementation rules — delegate substantial work, verify results. When tasks are complete, suggest the user runs /flow:next for the next task."
-    ;;
-  *)
-    echo '{}'
-    exit 0
-    ;;
-esac
+if [ "$IS_FLOW_COMMAND" = true ]; then
+  CONTEXT=""
+  # For /flow: commands, still validate the phase exists
+  case "$PHASE" in
+    planning|planned|implementing) ;;
+    *)
+      echo '{}'
+      exit 0
+      ;;
+  esac
+else
+  case "$PHASE" in
+    planning)
+      CONTEXT="**Phase: planning.** Follow /flow:build planning rules — understand deeply, plan in conversation. No code writes. Keep questioning yourself: Do you understand enough? Have you searched for side-effects, affected areas, and new possibilities? Is the plan solid enough to approve? If not, keep iterating. When genuinely confident, suggest the user runs /flow:approve."
+      ;;
+    planned)
+      if [ -n "$FOCUS" ]; then
+        CONTEXT="**Phase: planned | Focus: ${FOCUS}.** Follow /flow:next deep-dive rules — research thoroughly, think through edge cases. No code writes. Keep iterating: ask yourself if you are confident enough to implement this correctly. If not, dig deeper or ask. When confident, suggest the user runs /flow:implement."
+      else
+        CONTEXT="**Phase: planned.** Follow /flow:build planned-phase rules. Suggest the user runs /flow:next or tells you which tasks to focus on. Deep-dive before implementing."
+      fi
+      ;;
+    implementing)
+      CONTEXT="**Phase: implementing.** Follow /flow:build implementation rules — delegate substantial work, verify results. When tasks are complete, suggest the user runs /flow:next for the next task."
+      ;;
+    *)
+      echo '{}'
+      exit 0
+      ;;
+  esac
+fi
 
 # --- Build session title ---
 # Derive from task filename + focus so it updates as work progresses
@@ -90,7 +103,7 @@ if [ -n "$TASK_FILE" ]; then
 fi
 
 # --- Output ---
-if [ -n "$SESSION_TITLE" ]; then
+if [ -n "$CONTEXT" ] && [ -n "$SESSION_TITLE" ]; then
   jq -n --arg ctx "$CONTEXT" --arg title "$SESSION_TITLE" '{
     hookSpecificOutput: {
       hookEventName: "UserPromptSubmit",
@@ -98,13 +111,22 @@ if [ -n "$SESSION_TITLE" ]; then
       sessionTitle: $title
     }
   }'
-else
+elif [ -n "$CONTEXT" ]; then
   jq -n --arg ctx "$CONTEXT" '{
     hookSpecificOutput: {
       hookEventName: "UserPromptSubmit",
       additionalContext: $ctx
     }
   }'
+elif [ -n "$SESSION_TITLE" ]; then
+  jq -n --arg title "$SESSION_TITLE" '{
+    hookSpecificOutput: {
+      hookEventName: "UserPromptSubmit",
+      sessionTitle: $title
+    }
+  }'
+else
+  echo '{}'
 fi
 
 exit 0
