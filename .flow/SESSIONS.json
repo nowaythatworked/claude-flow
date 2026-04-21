@@ -25,13 +25,5 @@
       "build/SKILL.md — remove scope assessment from planning phase"
     ],
     "parent": null
-  },
-  "fecf827a-ec05-4b63-87d7-20d9e60c30f4": {
-    "phase": "implementing",
-    "task_file": "fix-stale-session-language.md",
-    "focus": [
-      "Reframe how the agent interprets other session entries in skills/next/SKILL.md"
-    ],
-    "parent": null
   }
 }
