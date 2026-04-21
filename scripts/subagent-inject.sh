@@ -2,6 +2,9 @@
 # SubagentStart hook: inject quality rules into subagent context
 # Reads always-on rules from .flow/rules/always/ and dynamic rules
 # from .flow/rules/dynamic/ to give subagents the necessary context.
+# Dynamic rules are filtered to only those selected by the parent session's
+# rule evaluator (cached in /tmp/flow-rule-cache/last-selection-{session_id}.json).
+# Falls back to loading ALL dynamic rules if no cache exists.
 
 set -euo pipefail
 
@@ -24,10 +27,12 @@ fi
 if command -v jq &>/dev/null; then
   CWD=$(echo "$INPUT" | jq -r '.cwd // empty' 2>/dev/null || true)
   AGENT_TYPE=$(echo "$INPUT" | jq -r '.agent_type // empty' 2>/dev/null || true)
+  SESSION_ID=$(echo "$INPUT" | jq -r '.session_id // empty' 2>/dev/null || true)
 else
   # Fallback: crude extraction without jq
   CWD=$(echo "$INPUT" | sed -n 's/.*"cwd"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p' | head -1)
   AGENT_TYPE=$(echo "$INPUT" | sed -n 's/.*"agent_type"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p' | head -1)
+  SESSION_ID=$(echo "$INPUT" | sed -n 's/.*"session_id"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p' | head -1)
 fi
 
 if [ -z "$CWD" ]; then
@@ -55,8 +60,41 @@ ${CONTENT}
 fi
 
 # Dynamic rules from .flow/rules/dynamic/
+# If the parent session cached its rule selection, only inject those rules.
+# Otherwise fall back to loading all dynamic rules.
 OPTIONAL_DIR="${CWD}/.flow/rules/dynamic"
-if [ -d "$OPTIONAL_DIR" ]; then
+CACHE_FILE=""
+SELECTED_RULES=""
+
+if [ -n "$SESSION_ID" ]; then
+  CACHE_FILE="/tmp/flow-rule-cache/last-selection-${SESSION_ID}.json"
+fi
+
+if [ -n "$CACHE_FILE" ] && [ -f "$CACHE_FILE" ]; then
+  # Extract selected rule filenames from the cache
+  if command -v jq &>/dev/null; then
+    SELECTED_RULES=$(jq -r '.selected[].rule // empty' "$CACHE_FILE" 2>/dev/null || true)
+  fi
+
+  if [ -n "$SELECTED_RULES" ]; then
+    # Load only the selected dynamic rules
+    while IFS= read -r RULE_NAME; do
+      [ -n "$RULE_NAME" ] || continue
+      f="${OPTIONAL_DIR}/${RULE_NAME}"
+      [ -f "$f" ] || continue
+      CONTENT=$(cat "$f" 2>/dev/null || true)
+      if [ -n "$CONTENT" ]; then
+        RULES="${RULES}--- Dynamic Rule [${RULE_NAME}] ---
+${CONTENT}
+
+"
+      fi
+    done <<< "$SELECTED_RULES"
+  fi
+  # If SELECTED_RULES is empty (cache exists but no selections), inject nothing
+  # from dynamic — this is intentional (parent evaluated and chose none)
+elif [ -d "$OPTIONAL_DIR" ]; then
+  # No cache — fall back to loading ALL dynamic rules
   for f in "$OPTIONAL_DIR"/*.md; do
     [ -f "$f" ] || continue
     RULE_NAME=$(basename "$f")

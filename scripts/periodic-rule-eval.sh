@@ -1,7 +1,7 @@
 #!/bin/bash
 # PostToolUse hook: periodically re-evaluate dynamic rules
 # Debounced — only fires every N tool uses.
-# When it fires, uses claude -p with Sonnet to re-evaluate which dynamic
+# When it fires, calls eval-rules-core.sh to re-evaluate which dynamic
 # rules are relevant, reading the conversation transcript for full context.
 # Only injects new rules if the selection changed.
 
@@ -60,91 +60,37 @@ if [ $((COUNTER % DEBOUNCE_INTERVAL)) -ne 0 ]; then
   exit 0
 fi
 
-# --- Build rule catalog ---
-RULE_CATALOG=""
-for rule_file in "$OPTIONAL_DIR"/*.md; do
-  [ -f "$rule_file" ] || continue
-  RULE_ID=$(basename "$rule_file")
-  SUMMARY=$(head -5 "$rule_file" 2>/dev/null | tr '\n' ' ')
-  RULE_CATALOG="${RULE_CATALOG}  - ${RULE_ID}: ${SUMMARY}\n"
-done
+# --- Read previous selection from cache (before core overwrites it) ---
+PREV_CACHE_FILE="${CACHE_DIR}/last-selection-${SESSION_ID:-default}.json"
+PREV_RULES=""
+if [ -f "$PREV_CACHE_FILE" ]; then
+  PREV_RULES=$(jq -r '[.selected[].rule] | sort | .[]' "$PREV_CACHE_FILE" 2>/dev/null || true)
+fi
 
-if [ -z "$RULE_CATALOG" ]; then
+# --- Call eval-rules-core.sh ---
+SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
+
+CORE_ARGS=(--cwd "$CWD" --session-id "${SESSION_ID:-default}")
+if [ -n "$TRANSCRIPT" ]; then
+  CORE_ARGS+=(--transcript "$TRANSCRIPT")
+fi
+
+SELECTED=$("$SCRIPT_DIR/eval-rules-core.sh" "${CORE_ARGS[@]}" 2>/dev/null || true)
+
+# --- Read new selection from cache (core just wrote it) ---
+NEW_RULES=""
+if [ -f "$PREV_CACHE_FILE" ]; then
+  NEW_RULES=$(jq -r '[.selected[].rule] | sort | .[]' "$PREV_CACHE_FILE" 2>/dev/null || true)
+fi
+
+# --- Change detection: compare sorted rule filenames ---
+if [ "$NEW_RULES" = "$PREV_RULES" ]; then
   echo '{}'
   exit 0
 fi
 
-# --- Extract recent conversation from transcript ---
-RECENT_CONTEXT=""
-if [ -n "$TRANSCRIPT" ] && [ -f "$TRANSCRIPT" ]; then
-  # Extract user messages and assistant text from last ~100 lines of JSONL
-  RECENT_CONTEXT=$(tail -100 "$TRANSCRIPT" 2>/dev/null | \
-    python3 -c "
-import sys, json
-lines = []
-for line in sys.stdin:
-    try:
-        d = json.loads(line.strip())
-        if d.get('type') == 'user':
-            msg = d.get('message', {}).get('content', '')
-            if isinstance(msg, list):
-                for part in msg:
-                    if isinstance(part, dict) and part.get('type') == 'text':
-                        lines.append('USER: ' + part['text'][:200])
-                    elif isinstance(part, str):
-                        lines.append('USER: ' + part[:200])
-            elif isinstance(msg, str):
-                lines.append('USER: ' + msg[:200])
-        elif d.get('type') == 'assistant':
-            msg = d.get('message', {}).get('content', [])
-            for part in msg if isinstance(msg, list) else []:
-                if isinstance(part, dict) and part.get('type') == 'text':
-                    lines.append('AGENT: ' + part['text'][:200])
-    except: pass
-# Last 20 exchanges max
-for l in lines[-20:]:
-    print(l)
-" 2>/dev/null || true)
-fi
-
-# --- Previous selection ---
-PREV_FILE="${CACHE_DIR}/last-selection-${SESSION_ID:-default}.json"
-PREV_SELECTION=""
-if [ -f "$PREV_FILE" ]; then
-  PREV_SELECTION=$(cat "$PREV_FILE" 2>/dev/null || true)
-fi
-
-# --- Ask Sonnet to re-evaluate ---
-EVAL_PROMPT="You are a rule selector for a coding assistant. Based on the conversation so far, determine which dynamic quality rules should be active.
-
-Available rules:
-$(echo -e "$RULE_CATALOG")
-
-Previously selected: ${PREV_SELECTION:-none}
-Working directory: ${CWD}
-
-Recent conversation:
-${RECENT_CONTEXT:-no transcript available}
-
-Respond with ONLY a JSON array of relevant rule filenames. Example: [\"decode-pipeline.md\", \"ui-quality.md\"]
-If no rules are relevant, respond with: []"
-
-SELECTED=$(echo "$EVAL_PROMPT" | claude -p --model sonnet --output-format json 2>/dev/null | jq -r ".result // empty" 2>/dev/null || echo "[]")
-
-# --- Check if selection changed ---
-if [ "$SELECTED" = "$PREV_SELECTION" ]; then
-  echo '{}'
-  exit 0
-fi
-
-echo "$SELECTED" > "$PREV_FILE" 2>/dev/null || true
-
-# --- Load selected rules ---
-if command -v jq &>/dev/null; then
-  SELECTED_FILES=$(echo "$SELECTED" | jq -r '.[]' 2>/dev/null || true)
-else
-  SELECTED_FILES=$(echo "$SELECTED" | tr -d '[]"' | tr ',' '\n' | sed 's/^[[:space:]]*//;s/[[:space:]]*$//' || true)
-fi
+# --- Load selected rules from core stdout ---
+SELECTED_FILES="$SELECTED"
 
 if [ -z "$SELECTED_FILES" ]; then
   echo '{}'
@@ -189,7 +135,7 @@ if command -v jq &>/dev/null; then
   }'
 else
   ESCAPED=$(printf '%s' "$MATCHED_RULES" | python3 -c 'import sys,json; print(json.dumps(sys.stdin.read()))' 2>/dev/null || printf '"%s"' "$MATCHED_RULES")
-  echo "{\"hookSpecificOutput\":{\"additionalContext\":${ESCAPED}}}"
+  echo "{\"hookSpecificOutput\":{\"hookEventName\":\"PostToolUse\",\"additionalContext\":${ESCAPED}}}"
 fi
 
 exit 0
