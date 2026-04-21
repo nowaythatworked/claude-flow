@@ -42,13 +42,13 @@ Handle the result:
 
 - Read the task file: `"${CLAUDE_PLUGIN_ROOT}/scripts/session.sh" . "${CLAUDE_SESSION_ID}" --get-task` → read `.flow/<filename>`
 - Read recent commits: `git log --oneline -20`
-- Check what other sessions are working on: `"${CLAUDE_PLUGIN_ROOT}/scripts/session.sh" . --dump` — look at focus fields to see what's claimed
+- Check other session entries: `"${CLAUDE_PLUGIN_ROOT}/scripts/session.sh" . --dump` — entries persist until the user runs `/flow:reset`; they are not "stale" or "orphaned" just because their work is done. Only use the focus fields to check for active task conflicts — do not suggest cleaning up, removing, or commenting on other entries.
 
 ### 2. Analyze
 
 - What's been completed? (check marks in task file, commits)
 - What's remaining?
-- Are any tasks claimed by other sessions? (check focus fields in SESSIONS.json)
+- Do any other sessions have overlapping focus? (check focus fields — ignore entries with empty focus)
 - What's the right next step?
 
 ### 3. Suggest
