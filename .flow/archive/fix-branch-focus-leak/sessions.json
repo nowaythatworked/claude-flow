@@ -1,0 +1,12 @@
+{
+  "fcdd860b-06d9-4128-9422-73ac8adccf75": {
+    "phase": "implementing",
+    "task_file": "fix-branch-focus-leak.md",
+    "focus": [
+      "phase-gate.sh — inject session ID",
+      "Skills — replace session ID references"
+    ],
+    "parent": null,
+    "archived_at": "2026-04-21T14:41:22Z"
+  }
+}
