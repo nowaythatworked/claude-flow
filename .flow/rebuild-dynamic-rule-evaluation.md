@@ -53,11 +53,17 @@ Status: **complete** (commits 4871433, e06b2ee, 837deeb)
 - [x] Frontmatter stripping for injection — `inject.ts`, body-only with header
 - [x] Documentation — `docs/evaluator.md` (CLI, state files, locking, recursion guard, debugging); README "Internals" section linking to docs/
 
-### Phase 1 deviations / deferred to Phase 2
+### Phase 1 follow-ups (commits dcb2fdb, 01e4467, 5f62f83)
 
-- **Async eval debouncing**: only the 30s gate is implemented in the user-prompt-submit hook. The "every-5-tool-uses" trigger and "60s heartbeat" rely on signals not present in the UserPromptSubmit payload — they need PreToolUse counter + periodic timer wiring, which lives in the Phase 2 hook scripts.
-- **Real `claude --json-schema` smoke test**: integration test uses a mock `claude` via PATH. Needs a manual end-to-end smoke against the real binary before Phase 2 wires hooks live.
-- **Glob.path vs file_path in PreToolUse**: pre-tool-use hook only extracts `tool_input.file_path` (covers Read/Edit/Write); Glob matched paths are still seen via the transcript at next UserPromptSubmit eval.
+- [x] **Codesign in build script** (dcb2fdb): `bun run build` now appends `codesign -s - ../bin/flow-rules` (wrapped with `|| true` for non-macOS). Bun-compiled binaries inherit `com.apple.provenance` xattr that triggers Gatekeeper SIGKILL on read/hash without a signature.
+- [x] **PreToolUse async kickoff + pending-signals** (01e4467): every PreToolUse extracts file_path/path/pattern from tool input, appends to `.flow/rule-cache/pending-signals.jsonl`, runs sync pattern+keyword match (additive), spawns detached async LLM eval (30s debounce). Next `runFullEval` drains pending-signals into pattern matcher + digest. Truncates on successful eval; preserves on failure for retry. This closes both gap (a) "every-5-tool-uses trigger" and (c) "Glob.path handling" — every tool boundary now feeds the eval pipeline.
+- [x] **`--max-turns 3` in haiku.ts** (01e4467): hard ceiling on tool-use loops claude might take.
+- [x] **Real claude in integration tests** (01e4467): mock-claude removed; integration test invokes real `claude -p --model haiku`, asserts state shape + deterministic pattern path; treats LLM selection as shape-only (model variance). Skips on `FLOW_SKIP_REAL_CLAUDE=1` or missing `claude` binary. Test count: 82 → 107.
+
+### Still deferred
+
+- **60s heartbeat** for forced eval if nothing has happened — could be added but cheap to skip; in practice every UserPromptSubmit and every PreToolUse already kicks the eval (debounced).
+- **End-to-end live verification in orbit** — happens in Phase 8.
 
 ## Phase 2 — Hook integration
 
