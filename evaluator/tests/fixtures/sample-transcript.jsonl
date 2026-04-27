@@ -1,0 +1,8 @@
+{"uuid":"u1","type":"user","message":{"role":"user","content":"Please fix the React component to use proper typescript"}}
+{"uuid":"u2","type":"assistant","message":{"role":"assistant","content":[{"type":"tool_use","id":"tu1","name":"Read","input":{"file_path":"/proj/src/Button.tsx"}}]}}
+{"uuid":"u3","type":"user","message":{"role":"user","content":[{"type":"tool_result","tool_use_id":"tu1","content":"     1→import React from 'react';\n     2→export const Button = () => <button>x</button>;"}]}}
+{"uuid":"u4","type":"assistant","message":{"role":"assistant","content":[{"type":"tool_use","id":"tu2","name":"Edit","input":{"file_path":"/proj/src/Button.tsx","old_string":"() =>","new_string":"(): JSX.Element =>"}}]}}
+{"uuid":"u5","type":"user","message":{"role":"user","content":[{"type":"tool_result","tool_use_id":"tu2","content":"applied"}]}}
+{"uuid":"u6","type":"assistant","message":{"role":"assistant","content":[{"type":"tool_use","id":"tu3","name":"Glob","input":{"pattern":"**/*.tsx"}}]}}
+{"uuid":"u7","type":"user","message":{"role":"user","content":[{"type":"tool_result","tool_use_id":"tu3","content":"Found 1 files\nsrc/Button.tsx"}]}}
+{"uuid":"u8","type":"assistant","message":{"role":"assistant","content":[{"type":"text","text":"Done — added explicit JSX.Element return type."}]}}
