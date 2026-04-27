@@ -180,6 +180,12 @@ Branch detection is automatic — the `SessionStart` hook detects branched sessi
 | `/flow:rules` | Show all active rules and their status |
 | `/flow:reload-rules` | Re-read all rules and re-evaluate dynamic rules (use when rules get lost) |
 
+## Internals
+
+For deeper details on specific subsystems, see [`docs/`](./docs/):
+
+- [`docs/evaluator.md`](./docs/evaluator.md) — the `bin/flow-rules` binary that selects dynamic rules (CLI, state files, locking, debugging)
+
 ## Project Structure
 
 After running `/flow:init`:
