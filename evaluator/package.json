@@ -4,7 +4,7 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "build": "bun build --compile src/cli.ts --outfile ../bin/flow-rules",
+    "build": "bun build --compile src/cli.ts --outfile ../bin/flow-rules && (codesign -s - ../bin/flow-rules 2>/dev/null || true)",
     "test": "bun test",
     "typecheck": "tsc --noEmit"
   },
