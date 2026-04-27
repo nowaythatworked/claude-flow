@@ -14,6 +14,10 @@ import { matchPatterns, matchKeywords } from "./matcher.ts";
 import { buildDigest } from "./digest.ts";
 import { evaluate as haikuEvaluate } from "./haiku.ts";
 import { appendLog } from "./log.ts";
+import {
+  drainPendingSignals,
+  truncatePendingSignals,
+} from "./pending-signals.ts";
 
 export interface FullEvalOpts {
   cwd: string;
@@ -73,10 +77,19 @@ export async function runFullEval(opts: FullEvalOpts): Promise<EvalResult> {
           newWatermarkCandidate: watermark ?? "",
         };
 
-    const filePaths = collectFilePaths(extracted);
+    const pendingSignals = drainPendingSignals(opts.cwd);
+    const signalPaths = uniqueStrings(
+      pendingSignals.map((s) => s.path),
+    );
+
+    const transcriptPaths = collectFilePaths(extracted);
+    const allPathsForMatching = uniqueStrings([
+      ...transcriptPaths,
+      ...signalPaths,
+    ]);
     const text = collectText(extracted);
 
-    const patternHits = matchPatterns(filePaths, catalog);
+    const patternHits = matchPatterns(allPathsForMatching, catalog);
     const keywordHits = matchKeywords(text, catalog);
 
     const alreadySelected = new Set<string>([...patternHits, ...keywordHits]);
@@ -85,7 +98,12 @@ export async function runFullEval(opts: FullEvalOpts): Promise<EvalResult> {
     let haiku: HaikuOutput | null = null;
     let digest = "";
     if (llmCatalog.length > 0) {
-      digest = buildDigest(extracted, [...alreadySelected], llmCatalog);
+      digest = buildDigest(
+        extracted,
+        [...alreadySelected],
+        llmCatalog,
+        signalPaths,
+      );
       try {
         haiku = await haikuEvaluate(digest);
       } catch (err) {
@@ -112,6 +130,15 @@ export async function runFullEval(opts: FullEvalOpts): Promise<EvalResult> {
         watermark_uuid: extracted.newWatermarkCandidate,
         last_seen_ts: state.last_eval_ts,
       };
+    }
+
+    // truncate signals only when consumed end-to-end:
+    //   - no LLM catalog needed → signals fully handled via pattern match
+    //   - LLM catalog present and haiku succeeded → fully handled
+    // if haiku was needed but failed, leave signals so the next eval retries
+    const signalsConsumed = llmCatalog.length === 0 || haiku !== null;
+    if (signalsConsumed && pendingSignals.length > 0) {
+      truncatePendingSignals(opts.cwd);
     }
 
     writeState(key, state, opts.cwd);
@@ -211,6 +238,17 @@ function mergeUnique(a: string[], b: string[]): string[] {
       seen.add(id);
       out.push(id);
     }
+  }
+  return out;
+}
+
+function uniqueStrings(values: string[]): string[] {
+  const seen = new Set<string>();
+  const out: string[] = [];
+  for (const v of values) {
+    if (seen.has(v)) continue;
+    seen.add(v);
+    out.push(v);
   }
   return out;
 }

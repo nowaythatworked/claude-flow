@@ -10,9 +10,11 @@ export function buildDigest(
   extracted: ExtractedContent,
   currentSelection: string[],
   llmCatalog: LLMCatalogEntry[],
+  agentTouchedPaths: string[] = [],
 ): string {
   const sections: string[] = [];
   sections.push(formatFilesSection(extracted));
+  sections.push(formatAgentTouchedPaths(agentTouchedPaths));
   sections.push(formatGlobSection(extracted.globResults));
   sections.push(formatRecentUser(extracted.recentUserText));
   sections.push(formatRecentAssistant(extracted.recentAssistantText));
@@ -22,6 +24,13 @@ export function buildDigest(
     "## Instructions\nBased on the activity above, select which rules from the LLM catalog should now apply. Return strict JSON matching the schema.",
   );
   return sections.filter((s) => s !== "").join("\n\n");
+}
+
+function formatAgentTouchedPaths(paths: string[]): string {
+  if (paths.length === 0) return "";
+  const lines: string[] = ["## Agent recently touched these"];
+  for (const p of paths) lines.push(`- ${p}`);
+  return lines.join("\n");
 }
 
 function formatFilesSection(extracted: ExtractedContent): string {

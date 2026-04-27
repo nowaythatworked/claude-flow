@@ -10,20 +10,26 @@ const SCHEMA = {
   required: ["task_type", "selected_rules", "reason"],
 } as const;
 
+export function buildClaudeArgs(): string[] {
+  return [
+    "claude",
+    "-p",
+    "--model",
+    "haiku",
+    "--output-format",
+    "json",
+    "--json-schema",
+    JSON.stringify(SCHEMA),
+    "--max-turns",
+    "3",
+    "--no-session-persistence",
+  ];
+}
+
 export async function evaluate(digest: string): Promise<HaikuOutput> {
   const env = { ...process.env, FLOW_NO_HOOKS: "1" };
   const proc = Bun.spawn({
-    cmd: [
-      "claude",
-      "-p",
-      "--model",
-      "haiku",
-      "--output-format",
-      "json",
-      "--json-schema",
-      JSON.stringify(SCHEMA),
-      "--no-session-persistence",
-    ],
+    cmd: buildClaudeArgs(),
     env,
     stdin: "pipe",
     stdout: "pipe",
