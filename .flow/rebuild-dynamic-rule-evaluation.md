@@ -91,7 +91,7 @@ Status: **complete** (commits 4871433, e06b2ee, 837deeb)
 
 ## Phase 2 — Hook integration
 
-Status: **complete**
+Status: **complete** (commits 244402c, be7292d)
 
 Design simplification during deep-dive: the original plan was to add thin shell wrappers around the binary. Inspection of the Phase 1 implementation showed `flow-rules hook <name>` already handles stdin parsing, recursion guard, sync pattern+keyword, async LLM kickoff, and JSON output — wrappers would add nothing. `hooks.json` now invokes the binary directly. No new shell wrappers.
 
