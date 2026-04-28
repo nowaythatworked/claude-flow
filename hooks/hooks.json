@@ -21,6 +21,16 @@
             "timeout": 5
           }
         ]
+      },
+      {
+        "matcher": "Edit|Write|Read|Glob|Grep",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "${CLAUDE_PLUGIN_ROOT}/bin/flow-rules hook pre-tool-use",
+            "timeout": 5
+          }
+        ]
       }
     ],
     "UserPromptSubmit": [
@@ -46,8 +56,8 @@
         "hooks": [
           {
             "type": "command",
-            "command": "${CLAUDE_PLUGIN_ROOT}/scripts/evaluate-dynamic-rules.sh",
-            "timeout": 60
+            "command": "${CLAUDE_PLUGIN_ROOT}/bin/flow-rules hook user-prompt-submit",
+            "timeout": 5
           }
         ]
       }
@@ -60,16 +70,6 @@
             "type": "command",
             "command": "${CLAUDE_PLUGIN_ROOT}/scripts/scan-quality.sh",
             "timeout": 5
-          }
-        ]
-      },
-      {
-        "matcher": "Write|Edit|Bash",
-        "hooks": [
-          {
-            "type": "command",
-            "command": "${CLAUDE_PLUGIN_ROOT}/scripts/periodic-rule-eval.sh",
-            "timeout": 10
           }
         ]
       }

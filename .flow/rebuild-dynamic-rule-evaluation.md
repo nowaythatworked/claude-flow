@@ -91,13 +91,21 @@ Status: **complete** (commits 4871433, e06b2ee, 837deeb)
 
 ## Phase 2 — Hook integration
 
-- [ ] Replace `evaluate-dynamic-rules.sh` with thin shell wrapper that calls `flow-rules hook user-prompt-submit`
-- [ ] Replace `periodic-rule-eval.sh` (drop entirely; superseded by background trigger from binary)
-- [ ] Add `pre-tool-use-rules.sh` for PreToolUse(Edit|Write|Read|Glob|Grep) running pattern+keyword pass only
-- [ ] Update `hooks/hooks.json` matchers and timeouts
-- [ ] All hook scripts: first-line `FLOW_NO_HOOKS` short-circuit
-- [ ] Background eval kickoff via `setsid + & + disown`
-- [ ] Verify hook timing: hot path UserPromptSubmit <50ms; PreToolUse pattern <30ms
+Status: **complete**
+
+Design simplification during deep-dive: the original plan was to add thin shell wrappers around the binary. Inspection of the Phase 1 implementation showed `flow-rules hook <name>` already handles stdin parsing, recursion guard, sync pattern+keyword, async LLM kickoff, and JSON output — wrappers would add nothing. `hooks.json` now invokes the binary directly. No new shell wrappers.
+
+- [x] Update `hooks/hooks.json`: UserPromptSubmit calls `${CLAUDE_PLUGIN_ROOT}/bin/flow-rules hook user-prompt-submit` (timeout 5, was 60); new PreToolUse entry with matcher `Edit|Write|Read|Glob|Grep` calls `flow-rules hook pre-tool-use` (timeout 5); PostToolUse `periodic-rule-eval` entry dropped entirely
+- [x] Add `FLOW_NO_HOOKS=1` short-circuit (after `set -euo pipefail`) to remaining shell hooks: `phase-gate.sh`, `rule-reminder.sh`, `branch-detect.sh`, `inject-session-rules.sh`, `subagent-inject.sh`, `scan-quality.sh`, `phase-guard.sh`. Binary subcommands already have the guard internally.
+- [x] Delete obsolete bash scripts: `scripts/evaluate-dynamic-rules.sh` (109 lines), `scripts/eval-rules-core.sh` (236 lines), `scripts/periodic-rule-eval.sh` (141 lines), and `tests/test-eval-rules-core.sh` (would otherwise fail under `run-all.sh`)
+- [x] Background kickoff already inside binary (`Bun.spawn` with `stdin/stdout/stderr: "ignore"` + `FLOW_NO_HOOKS=1` env), no shell-side `setsid` needed
+- [x] Verified hook timing on macOS: binary cold start 10-30ms steady state; UserPromptSubmit subcommand with real SESSIONS.json + state read ~20-30ms; PreToolUse subcommand with signal append + pattern match ~20ms. All comfortably under 50ms target. ~3000× improvement over the 60s timeout it replaces.
+- [x] Pre-existing failures in `tests/test-scripts.sh` (`flow:next skips additionalContext`, `flow:implement skips additionalContext`) confirmed not caused by these changes (`git stash` reproduced them on baseline)
+
+### Phase 2 follow-ups (deferred)
+
+- **`subagent-inject.sh` still reads `/tmp/flow-rule-cache/last-selection-{session_id}.json`** (legacy bash cache path that no longer exists). It falls back to "load all dynamic rules" when the cache is missing, so it's functionally safe but inefficient. Phase 5 (SubagentStart integration) replaces this with the binary's `flow-rules hook subagent-start` and warm-starts from `.flow/rule-cache/`.
+- **End-to-end live verification** (see Phase 8) — measuring actual user-visible latency in orbit.
 
 ## Phase 3 — Skill rework
 
