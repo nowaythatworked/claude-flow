@@ -177,7 +177,12 @@ describe("integration (real claude)", () => {
     if (typeof lastEntry === "object" && lastEntry !== null) {
       expect(typeof Reflect.get(lastEntry, "ts")).toBe("string");
       expect(typeof Reflect.get(lastEntry, "trigger_reason")).toBe("string");
-      expect(typeof Reflect.get(lastEntry, "duration_ms")).toBe("number");
+      const durationMs = Reflect.get(lastEntry, "duration_ms");
+      expect(typeof durationMs).toBe("number");
+      // Recursion-regression check: if FLOW_NO_HOOKS=1 didn't propagate to
+      // the inner claude spawn, plugin hooks fired by inner claude would
+      // each take ~60s. A passing eval is much faster than that.
+      expect(durationMs).toBeLessThan(45_000);
     }
   }, 130_000);
 
@@ -189,4 +194,94 @@ describe("integration (real claude)", () => {
     const { key } = deriveCacheKey("task.md", ["something"]);
     expect(fs.existsSync(stateFilePath(key, tmp))).toBe(false);
   });
+
+  // End-to-end recursion-prevention test against real claude.
+  // Sets up a custom plugin with a UserPromptSubmit hook that would sleep 60s
+  // (simulating a slow recursive call) unless FLOW_NO_HOOKS=1 short-circuits
+  // it. We invoke real claude with this plugin and FLOW_NO_HOOKS=1 set in the
+  // env. If the env propagates correctly, the hook exits immediately and
+  // claude finishes fast. If it doesn't, the hook sleeps and the test
+  // exceeds its budget.
+  test("real claude with FLOW_NO_HOOKS=1 short-circuits plugin hooks", () => {
+    if (!realClaudeAvailable()) {
+      console.log(
+        "[skip] recursion e2e: claude not on PATH or FLOW_SKIP_REAL_CLAUDE=1",
+      );
+      return;
+    }
+
+    const pluginDir = path.join(tmp, "test-plugin");
+    fs.mkdirSync(path.join(pluginDir, ".claude-plugin"), { recursive: true });
+    fs.mkdirSync(path.join(pluginDir, "hooks"), { recursive: true });
+    fs.mkdirSync(path.join(pluginDir, "scripts"), { recursive: true });
+
+    fs.writeFileSync(
+      path.join(pluginDir, ".claude-plugin", "plugin.json"),
+      JSON.stringify({ name: "recursion-test", version: "0.0.1" }),
+    );
+
+    const markerFile = path.join(tmp, "hook-fired.txt");
+    const hookScript = path.join(pluginDir, "scripts", "test-hook.sh");
+    fs.writeFileSync(
+      hookScript,
+      `#!/bin/sh
+# First line: short-circuit if FLOW_NO_HOOKS=1.
+# Without this guard, a plugin hook in production would call claude -p
+# and recurse forever (the original 60s bug). Here we simulate that
+# expensive path with sleep 60.
+[ "\${FLOW_NO_HOOKS:-}" = "1" ] && exit 0
+touch "${markerFile}"
+sleep 60
+echo '{}'
+`,
+      { mode: 0o755 },
+    );
+
+    fs.writeFileSync(
+      path.join(pluginDir, "hooks", "hooks.json"),
+      JSON.stringify({
+        hooks: {
+          UserPromptSubmit: [
+            {
+              hooks: [
+                {
+                  type: "command",
+                  command: "${CLAUDE_PLUGIN_ROOT}/scripts/test-hook.sh",
+                  timeout: 90,
+                },
+              ],
+            },
+          ],
+        },
+      }),
+    );
+
+    const start = Date.now();
+    const result = spawnSync(
+      "claude",
+      [
+        "-p",
+        "respond with the single character X",
+        "--model",
+        "haiku",
+        "--no-session-persistence",
+        "--plugin-dir",
+        pluginDir,
+        "--dangerously-skip-permissions",
+      ],
+      {
+        env: { ...process.env, FLOW_NO_HOOKS: "1" },
+        encoding: "utf8",
+        timeout: 60_000,
+      },
+    );
+    const duration = Date.now() - start;
+
+    expect(result.status).toBe(0);
+    // Hook short-circuit means claude completes fast. Without the guard,
+    // the sleep 60 in the hook would push this past 60s.
+    expect(duration).toBeLessThan(30_000);
+    // Marker should NOT exist — hook exited before touching it.
+    expect(fs.existsSync(markerFile)).toBe(false);
+  }, 90_000);
 });
