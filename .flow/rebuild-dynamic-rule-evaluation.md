@@ -16,18 +16,42 @@ The system needs to be rebuilt — not patched.
 
 ## Architecture (locked)
 
-- **Storage**: `.flow/rule-cache/<task_file>__<focus_hash>.json` (parent sessions); `.flow/rule-cache/sub__<parent_session>__<agent_id>.json` (subagents); `.flow/rule-cache/eval-log.jsonl` (telemetry). Lock file as sibling `<state>.json.lock`. State writes are tmp + atomic rename.
-- **Cache shape**: schema_version, task_file, focus, focus_hash, selected_rules, task_type, trigger_reason, last_eval_ts, last_eval_duration_ms, per_session map of (watermark_uuid, last_seen_ts).
-- **Evaluator**: Bun-compiled binary at `${CLAUDE_PLUGIN_ROOT}/bin/flow-rules`. Watermark-bounded transcript extraction (Read results, Edit diffs, Glob/Grep results, recent user/assistant text). Generous truncation: full files <30KB; head 300 + tail 50 lines otherwise; no overall input cap. Single Haiku call with structured output `{ task_type, selected_rules, reason }`. Catalog passed = rule-id + 1-line description only (never rule bodies). Tools enabled (Read, Glob, Grep) with `maxTurns: 3` ceiling. Watermark advanced script-side based on what was included in the digest (never LLM-decided).
-- **Recursion guard**: `FLOW_NO_HOOKS=1` env var set before any subprocess `claude -p`. First line of every hook script: short-circuit if set.
-- **Concurrency**: cooperative `.lock` file (PID + timestamp + covers_up_to_uuid). Async triggers skip-on-busy. Sync triggers wait up to 15s, then verify watermark coverage, re-eval if stale. Stale-lock reaping at 90s + dead-PID check.
-- **Modes (rule frontmatter)**: `pattern` | `pattern+llm` | `llm` | `keyword`. Default = `llm`; `applies_to` upgrades default to `pattern+llm`. No `always` mode (`.flow/rules/` directory is the always-on path).
-- **Triggers**: Sync pattern+keyword on every UserPromptSubmit and on PreToolUse(Edit|Write|Read|Glob|Grep). Async LLM eval kickoff on UserPromptSubmit + every 5 tool calls + 60s heartbeat. 30s minimum spacing between LLM evals.
+- **Storage**: `.flow/rule-cache/<task_file>__<focus_hash>.json` (parent sessions); `.flow/rule-cache/sub__<parent_session>__<agent_id>.json` (subagents); `.flow/rule-cache/eval-log.jsonl` (telemetry); `.flow/rule-cache/pending-signals.jsonl` (PreToolUse-accumulated paths between evals). Lock file as sibling `<state>.json.lock` (mkdir-based atomic). State writes are tmp + atomic rename.
+- **Cache shape**: schema_version, task_file, focus, focus_hash, **selected_via_pattern[]**, **selected_via_keyword[]**, **selected_via_llm[]** (injected = union of the three), task_type, trigger_reason, last_eval_ts, last_eval_duration_ms, per_session map of (watermark_uuid, last_seen_ts).
+- **Evaluator**: Bun-compiled binary at `${plugin}/bin/flow-rules` (committed in-repo, ad-hoc codesigned via `bun run build` to bypass macOS Gatekeeper). Watermark-bounded transcript extraction (Read results, Edit diffs, Glob/Grep results, recent user/assistant text). Generous truncation: full files <30KB; head 300 + tail 50 lines otherwise; no overall input cap. Disk fallback (`head -100`) for files edited but not read. Single Haiku call with structured output `{ task_type, selected_rules, reason }`. Catalog passed = rule-id + 1-line `relevance` only (never rule bodies). `--max-turns 3` ceiling; no `--tools` flag (claude default tool set); no `--max-budget-usd` (cost analyzed post-hoc via session JSONLs and eval-log). Watermark advanced script-side based on what was included in the digest (never LLM-decided).
+- **Recursion guard**: `FLOW_NO_HOOKS=1` env var set in subprocess env before any `claude -p` spawn. First line of every hook (binary's hook commands AND Phase 2 shell scripts): short-circuit if set. End-to-end test exercises this against real claude with a custom plugin.
+- **Concurrency**: cooperative `.lock` directory (PID + timestamp + covers_up_to_uuid in `info.json`). Async triggers skip-on-busy. Sync triggers wait up to 15s, then verify watermark coverage, re-eval if stale. Stale-lock reaping at 90s + dead-PID check.
+- **Frontmatter shape (presence-inferred, no `eval_mode` field)**: any subset of three fields:
+  - `relevance: "<one-line description of when this rule applies>"` → rule becomes an LLM candidate
+  - `patterns: ["**/*.tsx", ...]` → glob-matched against file paths the agent touches
+  - `keywords: ["component", ...]` → case-insensitive substring match against recent user text + tool args
+  - Selection = **union** of all three paths. LLM catalog excludes rules already selected by pattern/keyword (no point asking).
+  - Rule with no signal fields → skipped + warned (author opted out).
+  - Field renames vs original plan: `applies_to` → `patterns`, `description` → `relevance`. Migration in Phase 7 hand-rewrites each rule.
+- **Triggers**: Sync pattern+keyword on every UserPromptSubmit and every PreToolUse (extracts file_path/path/pattern from tool input, appends to pending-signals). Async LLM eval kicked off from both — 30s minimum-spacing debounce blocks stampede. If kickoff is debounced, the path is already in pending-signals so the next eval consumes it. No 5-tool counter or 60s heartbeat needed (every-tool-boundary kickoff covers it).
 - **Checkpoints**: `/flow:approve` and `/flow:implement` skill instructions force `flow-rules eval --sync` and require the agent to cross-check the plan against ALL loaded rules (static AND dynamic, prior AND new) every time — not just once.
 - **Skill rework**: `build`, `next`, `implement` restructured with named/numbered anchored sections, full instructions per section, audit-shape outputs at checkpoints.
 - **Phase-aware reminders**: `phase-gate.sh` reads SESSIONS.json and emits a phase-specific reminder pointing at the correct skill+section, including instruction to re-invoke the skill if the section content isn't recalled.
-- **Subagents**: per-subagent cache file warm-started from parent's selection; independent eval against own transcript.
+- **Subagents**: per-subagent cache file (`sub__<parent>__<agent>.json`) warm-started from parent's selection; independent eval against own transcript at `<parent_session>/subagents/agent-<id>.jsonl`.
 - **rule-evaluator agent**: retired. Single binary covers all paths (hooks + skills).
+- **Tests**: integration tests use real claude (same model as production: haiku); skip via `FLOW_SKIP_REAL_CLAUDE=1` or when `claude` not on PATH. Recursion guard verified by stub-claude env capture + real-claude e2e with custom plugin.
+
+### Deviations from earlier design (during deep-dive / implementation)
+
+These changes were agreed in conversation and superseded earlier sections of the architecture. Captured here so the plan reflects what's actually built.
+
+| Original | Replaced with | Why |
+|---|---|---|
+| `eval_mode: pattern\|keyword\|llm\|pattern+llm` field | Presence-inferred from which fields are set (`relevance`/`patterns`/`keywords`) | Simpler; rule authors already think in terms of what signals exist; no extra flag to learn |
+| Field name `applies_to` | `patterns` | Plural matches the array value; clearer mental model |
+| Field name `description` | `relevance` | "Description" is generic; `relevance` names what the field's actually for (the LLM's relevance-decision instruction) |
+| 5-tool-counter + 60s heartbeat triggers | Every UserPromptSubmit + every PreToolUse triggers async eval (debounced 30s) | Pending-signals + universal kickoff makes counters/heartbeat redundant; simpler |
+| `claude --tools "Read,Glob,Grep"` | No `--tools` flag (claude default set) | User clarification: passing `--tools` only restricts; default already gives claude what it needs |
+| `--max-budget-usd` cost cap | None (cost measured post-hoc via session JSONLs) | User accepts cost; cap added complexity for marginal value |
+| `claude --bare` for recursion guard | `FLOW_NO_HOOKS=1` env var | `--bare` requires API key auth; user is on OAuth (claude.ai). Env var works with any auth |
+| Rule body bodies passed to LLM eval | Only rule-id + `relevance` to LLM; full body loaded only at injection time | Smaller LLM input; clearer separation between "rule selection" and "rule injection" |
+| Mock claude in integration tests | Real claude via PATH (skippable via env) | User wants tests close to reality, OK with cost |
+| One commit binary in CI | Committed binary in repo, codesigned in build script | Zero-friction install for personal use; Gatekeeper SIGKILL workaround captured in build script |
 
 ## Phase 1 — Evaluator core
 
