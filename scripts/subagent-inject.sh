@@ -8,6 +8,9 @@
 
 set -euo pipefail
 
+# Skip when invoked from a nested claude -p (e.g. async eval kickoff).
+[ "${FLOW_NO_HOOKS:-}" = "1" ] && exit 0
+
 # --- Stdin timeout guard (3 seconds) ---
 INPUT=""
 if read -t 3 -r INPUT; then

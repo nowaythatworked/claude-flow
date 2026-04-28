@@ -11,6 +11,9 @@
 
 set -euo pipefail
 
+# Skip when invoked from a nested claude -p (e.g. async eval kickoff).
+[ "${FLOW_NO_HOOKS:-}" = "1" ] && exit 0
+
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 
 # --- Stdin guard ---
