@@ -25,7 +25,13 @@ Then read each file fully. Do NOT summarize, the act of reading them into contex
 
 ### 2. Dynamic rules
 
-Force a fresh evaluation of which dynamic rules apply, then read the selected rule files:
+First, clear this session's injection ledger so the next eval injects every selected rule fresh as an "initial set" (not as a delta against what hooks have already pushed):
+
+```bash
+rm -f .flow/rule-cache/injected/$CURRENT_SESSION_ID.json
+```
+
+Then force a fresh evaluation of which dynamic rules apply, then read the selected rule files:
 
 ```bash
 TASK=$("${CLAUDE_PLUGIN_ROOT}/scripts/session.sh" . "$CURRENT_SESSION_ID" --get-task)

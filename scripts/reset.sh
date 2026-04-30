@@ -120,6 +120,18 @@ else
 fi
 echo "Removed session entry"
 
+# --- Wipe per-session injection ledgers for affected sessions ---
+INJECT_DIR="$FLOW_DIR/rule-cache/injected"
+if [ -d "$INJECT_DIR" ]; then
+  if [ -n "$SIBLING_IDS" ]; then
+    while IFS= read -r sid; do
+      rm -f "$INJECT_DIR/$sid.json"
+    done <<< "$SIBLING_IDS"
+  else
+    rm -f "$INJECT_DIR/$SESSION_ID.json"
+  fi
+fi
+
 # --- Auto-commit if inside a git repo ---
 if git -C "$CWD" rev-parse --git-dir &>/dev/null 2>&1; then
   # Stage each path separately — some may not exist (moved/deleted)
