@@ -6,6 +6,7 @@ import { runUserPromptSubmit } from "./hooks/user-prompt-submit.ts";
 import { runPreToolUse } from "./hooks/pre-tool-use.ts";
 import { runSubagentStart } from "./hooks/subagent-start.ts";
 import { formatStatus } from "./status.ts";
+import { runCleanup, type CleanupReport } from "./cleanup.ts";
 
 interface ParsedArgs {
   positionals: string[];
@@ -65,6 +66,9 @@ async function main(): Promise<number> {
   }
   if (cmd === "state") {
     return cmdState(parsed);
+  }
+  if (cmd === "cleanup") {
+    return cmdCleanup(parsed);
   }
 
   process.stderr.write(`unknown command: ${cmd}\n`);
@@ -216,6 +220,87 @@ async function cmdState(parsed: ParsedArgs): Promise<number> {
   return 0;
 }
 
+async function cmdCleanup(parsed: ParsedArgs): Promise<number> {
+  const cwd = path.resolve(parsed.flags.get("cwd") ?? process.cwd());
+  const dryRun = parsed.bools.has("dry-run");
+  const maxEvalLog = toNonNegInt(parsed.flags.get("max-eval-log"), 1000);
+  const maxPendingSignals = toNonNegInt(
+    parsed.flags.get("max-pending-signals"),
+    100,
+  );
+  const report = runCleanup({
+    cwd,
+    dryRun,
+    maxEvalLog,
+    maxPendingSignals,
+  });
+  process.stdout.write(formatCleanupReport(cwd, report, dryRun));
+  return 0;
+}
+
+function toNonNegInt(raw: string | undefined, fallback: number): number {
+  if (raw === undefined) return fallback;
+  const parsed = Number.parseInt(raw, 10);
+  if (!Number.isFinite(parsed) || parsed < 0) return fallback;
+  return parsed;
+}
+
+function formatCleanupReport(
+  cwd: string,
+  report: CleanupReport,
+  dryRun: boolean,
+): string {
+  const verbDelete = dryRun ? "would delete" : "deleted";
+  const verbReap = dryRun ? "would reap" : "reaped";
+  const verbTruncate = dryRun ? "would truncate" : "truncated";
+
+  const lines: string[] = [];
+  lines.push(`Sweeping .flow/rule-cache/ in ${cwd}`);
+
+  const subN = report.subagentCachesDeleted.length;
+  if (subN === 0) {
+    lines.push(`  Subagent caches: 0 ${verbDelete}`);
+  } else {
+    lines.push(
+      `  Subagent caches: ${subN} ${verbDelete} (${report.subagentCachesDeleted.join(", ")})`,
+    );
+  }
+
+  const ledgerN = report.injectedLedgersDeleted.length;
+  if (ledgerN === 0) {
+    lines.push(`  Injected ledgers: 0 ${verbDelete}`);
+  } else {
+    lines.push(`  Injected ledgers: ${ledgerN} ${verbDelete}`);
+  }
+
+  const lockN = report.staleLocksReaped.length;
+  if (lockN === 0) {
+    lines.push(`  Stale locks: 0 ${verbReap}`);
+  } else {
+    lines.push(
+      `  Stale locks: ${lockN} ${verbReap} (${report.staleLocksReaped.join(", ")})`,
+    );
+  }
+
+  const evalT = report.evalLogTruncated;
+  if (evalT.from === evalT.to) {
+    lines.push(`  Eval log: ${evalT.from} entries (under limit)`);
+  } else {
+    lines.push(`  Eval log: ${verbTruncate} ${evalT.from} → ${evalT.to}`);
+  }
+
+  const sigT = report.pendingSignalsTruncated;
+  if (sigT.from === sigT.to) {
+    lines.push(`  Pending signals: ${sigT.from} entries (under limit)`);
+  } else {
+    lines.push(
+      `  Pending signals: ${verbTruncate} ${sigT.from} → ${sigT.to}`,
+    );
+  }
+
+  return `${lines.join("\n")}\n`;
+}
+
 async function readStdin(): Promise<string> {
   if (process.stdin.isTTY) return "";
   const chunks: Buffer[] = [];
@@ -238,6 +323,8 @@ Usage:
   flow-rules state path [--cwd <p>] [--task-file <name>] [--focus <json>]
   flow-rules state status [--cwd <p>] [--task-file <name>] [--focus <json>]
                           [--session-id <id>] [--brief]
+  flow-rules cleanup [--cwd <p>] [--dry-run] [--max-eval-log <N>]
+                     [--max-pending-signals <N>]
 `);
 }
 

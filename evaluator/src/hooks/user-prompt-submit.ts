@@ -1,17 +1,9 @@
-import * as fs from "node:fs";
-import * as path from "node:path";
 import { runPatternOnly } from "../eval.ts";
 import { readState } from "../cache.ts";
 import { deriveCacheKey } from "../paths.ts";
 import { computeDeltaInjection } from "./delta-inject.ts";
+import { readSession, type SessionRecord } from "../sessions.ts";
 import type { CacheState } from "../types.ts";
-
-interface SessionRecord {
-  phase: string;
-  task_file: string;
-  focus: string[];
-  parent: string | null;
-}
 
 interface HookPayload {
   session_id: string;
@@ -127,39 +119,3 @@ function parsePayload(stdin: string): HookPayload | null {
   };
 }
 
-export function readSession(
-  cwd: string,
-  sessionId: string,
-): SessionRecord | null {
-  const p = path.join(cwd, ".flow", "SESSIONS.json");
-  if (!fs.existsSync(p)) return null;
-  let raw: string;
-  try {
-    raw = fs.readFileSync(p, "utf8");
-  } catch {
-    return null;
-  }
-  let parsed: unknown;
-  try {
-    parsed = JSON.parse(raw);
-  } catch {
-    return null;
-  }
-  if (typeof parsed !== "object" || parsed === null) return null;
-  const rec = Reflect.get(parsed, sessionId);
-  if (typeof rec !== "object" || rec === null) return null;
-  const phase = Reflect.get(rec, "phase");
-  const taskFile = Reflect.get(rec, "task_file");
-  const focusRaw = Reflect.get(rec, "focus");
-  const parent = Reflect.get(rec, "parent");
-  if (typeof phase !== "string") return null;
-  if (typeof taskFile !== "string") return null;
-  if (!Array.isArray(focusRaw)) return null;
-  if (!focusRaw.every((x): x is string => typeof x === "string")) return null;
-  return {
-    phase,
-    task_file: taskFile,
-    focus: focusRaw,
-    parent: typeof parent === "string" ? parent : null,
-  };
-}

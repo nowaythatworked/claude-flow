@@ -2,7 +2,7 @@ import { runPatternOnly } from "../eval.ts";
 import { readState } from "../cache.ts";
 import { deriveCacheKey } from "../paths.ts";
 import { computeDeltaInjection } from "./delta-inject.ts";
-import { readSession } from "./user-prompt-submit.ts";
+import { readSession } from "../sessions.ts";
 import {
   appendPendingSignal,
   type PendingSignalTool,
