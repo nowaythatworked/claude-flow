@@ -157,7 +157,6 @@ Branch detection is automatic — the `SessionStart` hook detects branched sessi
 | Agent | Where | Purpose |
 |-------|-------|---------|
 | `flow-dev` | `.claude/agents/` (project) | Implementation agent with persistent memory, TDD-first, Stop hook for rule compliance. Customizable per project. |
-| `flow:rule-evaluator` | Plugin | Evaluates which dynamic rules are relevant. Used by hooks and orchestrator. Sonnet, read-only. |
 
 `flow-dev` is installed to your project by `/flow:init`, not kept in the plugin. This is intentional:
 - **Full hook support** — project-level agents can have hooks (plugin agents can't). The Stop hook blocks the agent from finishing until it verifies compliance with all loaded rules.
