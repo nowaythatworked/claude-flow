@@ -109,11 +109,24 @@ Design simplification during deep-dive: the original plan was to add thin shell 
 
 ## Phase 3 — Skill rework
 
-- [ ] Restructure `skills/build/SKILL.md` with named anchor sections; add explicit `Checkpoint — before /flow:approve` section with full instructions and required audit-shape output (enumerate rules checked + result per rule)
-- [ ] Restructure `skills/next/SKILL.md` with named anchor sections; add `Deep-dive process` section and `Checkpoint — before /flow:implement` section with same audit-shape requirement
-- [ ] Restructure `skills/implement/SKILL.md` with named anchor sections; add `Implementation rules` section
-- [ ] Each checkpoint section explicitly requires: cross-check plan against ALL loaded rules (static + dynamic, prior + new), every time, even if checkpoint ran earlier in the conversation
-- [ ] Skills replace any `Agent flow:rule-evaluator` invocations with direct `flow-rules eval --sync` calls
+Status: **complete** (commit e6fd187)
+
+Six SKILL.md files reworked. Anchor names locked (no em dashes anywhere): `Checkpoint before /flow:approve` (build), `Deep-dive process` + `Checkpoint before /flow:implement` (next), `Implementation rules` (implement). Audit-shape output is required at both checkpoints, enumerating every loaded rule (static + dynamic, equal weight). Phase 4 reminders will grep these heading strings literally.
+
+- [x] `skills/build/SKILL.md` — added "How rules reach you" preamble (injection vs reminder vs cross-check mental model); added Checkpoint before /flow:approve section with full audit-shape; replaced flow:rule-evaluator agent invocation with `flow-rules eval --sync --reason=planning-start`; replaced bulky Implementation phase section with tight "What happens after planning" + "What NOT to do during planning" boundary sections.
+- [x] `skills/next/SKILL.md` — renamed step 5 to "Deep-dive process" (anchored); added step 7 "Checkpoint before /flow:implement" with same audit-shape; added "What happens after the deep-dive" + "What NOT to do during the deep-dive" boundary sections.
+- [x] `skills/implement/SKILL.md` — top-level "Implementation rules" section consolidates delegation, verification, documentation, and subagent ambiguity handling expectations; anchored numbered steps; "What happens after implementation" + "What NOT to do during implementation" boundary sections. No checkpoint section in /flow:implement (handled upstream by /flow:next).
+- [x] `skills/reload-rules/SKILL.md` — replaced agent invocation in step 2 with `flow-rules eval --sync --reason=user-reload` + `state show` + Read of each selected rule file; documented fallback when binary unavailable.
+- [x] `skills/rules/SKILL.md` — fixed path drift (`.claude/rules/` → `.flow/rules/always/`).
+- [x] `skills/add-rule/SKILL.md` — extended Step 3 with presence-inferred frontmatter spec (`relevance`, `patterns`, `keywords`) for dynamic rules with worked example. Always-on rules don't need frontmatter.
+
+### Phase 3 design decisions
+
+- **Audit-shape is required, not optional.** Skills instruct the agent to produce a verbatim shape listing every static rule (8 in claude-flow) and every dynamic rule with ✓/⚠/✗ symbols + one-line justification per rule. This makes "did the agent re-check?" observable.
+- **Cross-check uses equal weight.** Static and dynamic rules treated identically. The skill text emphasizes "don't pick a subset."
+- **No em dashes anywhere.** Headings use no separator (preposition only); audit-shape bullets use `:`; prose uses `,` or `.` or `(...)`. Ensures Phase 4 reminder text matches anchor headings byte-for-byte without typographic ambiguity.
+- **Eval failure is non-blocking.** If `flow-rules eval --sync` exits non-zero, the skill instructs the agent to surface the error and proceed with cross-check against rules currently in context. Better to ship a slightly-stale check than no check.
+- **build/SKILL.md owns the mental-model preamble.** "How rules reach you" lives once in build; next/implement reference it via `§` pointer rather than duplicating.
 
 ## Phase 4 — Phase-aware reminders
 
