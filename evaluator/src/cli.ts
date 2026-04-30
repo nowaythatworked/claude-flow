@@ -5,6 +5,7 @@ import { deriveCacheKey, stateFilePath } from "./paths.ts";
 import { runUserPromptSubmit } from "./hooks/user-prompt-submit.ts";
 import { runPreToolUse } from "./hooks/pre-tool-use.ts";
 import { runSubagentStart } from "./hooks/subagent-start.ts";
+import { formatStatus } from "./status.ts";
 
 interface ParsedArgs {
   positionals: string[];
@@ -177,8 +178,10 @@ async function cmdHook(parsed: ParsedArgs): Promise<number> {
 
 async function cmdState(parsed: ParsedArgs): Promise<number> {
   const sub = parsed.positionals[1];
-  if (sub !== "show" && sub !== "path") {
-    process.stderr.write("flow-rules state: subcommand must be 'show' or 'path'\n");
+  if (sub !== "show" && sub !== "path" && sub !== "status") {
+    process.stderr.write(
+      "flow-rules state: subcommand must be 'show', 'path', or 'status'\n",
+    );
     return 2;
   }
   const cwd = path.resolve(parsed.flags.get("cwd") ?? process.cwd());
@@ -188,6 +191,20 @@ async function cmdState(parsed: ParsedArgs): Promise<number> {
 
   if (sub === "path") {
     process.stdout.write(`${stateFilePath(key, cwd)}\n`);
+    return 0;
+  }
+  if (sub === "status") {
+    const sessionIdRaw = parsed.flags.get("session-id");
+    const sessionId =
+      sessionIdRaw !== undefined && sessionIdRaw !== "" ? sessionIdRaw : null;
+    const out = formatStatus({
+      cwd,
+      taskFile,
+      focus,
+      sessionId,
+      brief: parsed.bools.has("brief"),
+    });
+    process.stdout.write(out);
     return 0;
   }
   const state = readState(key, cwd);
@@ -219,6 +236,8 @@ Usage:
                   (reads JSON payload from stdin)
   flow-rules state show [--cwd <p>] [--task-file <name>] [--focus <json>]
   flow-rules state path [--cwd <p>] [--task-file <name>] [--focus <json>]
+  flow-rules state status [--cwd <p>] [--task-file <name>] [--focus <json>]
+                          [--session-id <id>] [--brief]
 `);
 }
 
