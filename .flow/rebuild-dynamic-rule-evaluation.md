@@ -198,10 +198,18 @@ The binary's `flow-rules hook subagent-start` (implemented in Phase 1, with delt
 
 ## Phase 6 — Retire rule-evaluator agent
 
-- [ ] Delete `agents/rule-evaluator.md` and version mirrors in `~/.claude/plugins/cache/`
-- [ ] Remove references from `README.md`
-- [ ] Remove `Agent flow:rule-evaluator` invocations from `skills/reload-rules/SKILL.md` and `skills/build/SKILL.md` (replaced by direct `flow-rules eval --sync` in Phase 3)
-- [ ] Verify no lingering references via grep
+Status: **complete** (commit 3a7422a)
+
+The flow:rule-evaluator agent has been superseded by the `flow-rules` binary in Phases 1-5. All runtime callers were migrated in Phase 3 (commit e6fd187), so this phase was strictly a cleanup of the agent definition file and its references.
+
+- [x] Delete `agents/rule-evaluator.md` (repo source) and `~/.claude/plugins/cache/claude-flow/flow/0.4.4/agents/rule-evaluator.md` (installed plugin cache mirror). Marketplace mirror at `~/.claude/plugins/marketplaces/claude-flow/agents/rule-evaluator.md` left alone (resyncs from source on plugin update).
+- [x] Remove `flow:rule-evaluator` row from README.md "Custom Agents" table (line 160).
+- [x] Skill invocations: nothing to remove. Verified by grep — Phase 3 commit e6fd187 already replaced agent invocations with `flow-rules eval --sync` calls in `skills/reload-rules/SKILL.md` and `skills/build/SKILL.md`.
+- [x] Final grep confirms no residual references outside known false positives: `evaluator/src/cli.ts:213` (binary self-description), `.claude/settings.local.json` (auto-generated permission entry from `rm` invocation).
+
+### Out of scope, flagged for follow-up
+
+- README.md hooks table (lines 148-153) still describes the **old Sonnet eval behavior** ("Sonnet evaluates which dynamic rules apply", "Every 15 tool uses Re-evaluates dynamic rules based on transcript"). These don't name `rule-evaluator` directly so are out of strict Phase 6 scope, but are stale post-Phases 1-2 and worth a separate doc-cleanup task.
 
 ## Phase 7 — Rule frontmatter migration
 
