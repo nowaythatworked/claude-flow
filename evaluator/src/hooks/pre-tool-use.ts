@@ -1,7 +1,7 @@
-import { runPatternOnly, unionAllSelected } from "../eval.ts";
+import { runPatternOnly } from "../eval.ts";
 import { readState } from "../cache.ts";
 import { deriveCacheKey } from "../paths.ts";
-import { formatRulesInjection } from "../inject.ts";
+import { computeDeltaInjection } from "./delta-inject.ts";
 import { readSession } from "./user-prompt-submit.ts";
 import {
   appendPendingSignal,
@@ -60,23 +60,17 @@ export function runPreToolUse(stdin: string): number {
   });
 
   const fresh = readState(key, payload.cwd);
-  const ids = fresh ? unionAllSelected(fresh) : [];
-  const injection = formatRulesInjection(ids, payload.cwd, {
-    isInitial: true,
-  });
+  const out = computeDeltaInjection(
+    fresh,
+    payload.session_id,
+    payload.cwd,
+    "PreToolUse",
+  );
 
   if (shouldKickAsync(prevState)) {
     spawnAsyncEval(payload, session.task_file, session.focus);
   }
 
-  const out = injection
-    ? {
-        hookSpecificOutput: {
-          hookEventName: "PreToolUse",
-          additionalContext: injection,
-        },
-      }
-    : {};
   process.stdout.write(JSON.stringify(out));
   return 0;
 }

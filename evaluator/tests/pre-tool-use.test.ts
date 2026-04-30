@@ -9,6 +9,7 @@ import {
 import { drainPendingSignals } from "../src/pending-signals.ts";
 import { readState, writeState, initState } from "../src/cache.ts";
 import { deriveCacheKey } from "../src/paths.ts";
+import { readInjectedLedger } from "../src/injected-ledger.ts";
 import type { CacheState } from "../src/types.ts";
 
 let tmp: string;
@@ -167,5 +168,97 @@ describe("runPreToolUse signals + additive selection", () => {
     });
     runPreToolUse(stdin);
     expect(drainPendingSignals(tmp)).toEqual([]);
+  });
+});
+
+describe("runPreToolUse delta injection", () => {
+  function seedSelection(ids: string[]): void {
+    const { key } = deriveCacheKey("task.md", ["x"]);
+    const seeded: CacheState = initState("task.md", ["x"], tmp);
+    seeded.selected_via_pattern = ids;
+    writeState(key, seeded, tmp);
+  }
+
+  // Tool with no signal-tool path so runPatternOnly observes only what we
+  // seeded into state — keeps the test driven purely by selection-state edits.
+  function stdin(): string {
+    return JSON.stringify({
+      session_id: "sess-x",
+      cwd: tmp,
+      tool_name: "Bash",
+      tool_input: { command: "ls" },
+    });
+  }
+
+  test("first call: initial header + ledger seeded with selection", () => {
+    seedSelection(["tsx-rule.md"]);
+    captured = "";
+    runPreToolUse(stdin());
+    const out: unknown = JSON.parse(captured);
+    expect(typeof out).toBe("object");
+    if (typeof out !== "object" || out === null) return;
+    const hookOut = Reflect.get(out, "hookSpecificOutput");
+    expect(typeof hookOut).toBe("object");
+    if (typeof hookOut !== "object" || hookOut === null) return;
+    const ctx = Reflect.get(hookOut, "additionalContext");
+    expect(typeof ctx).toBe("string");
+    expect(ctx).toContain("# Dynamic Rules (initial set for this task)");
+    expect(ctx).toContain("Tsx rule body.");
+    expect(readInjectedLedger("sess-x", tmp)).toEqual(["tsx-rule.md"]);
+  });
+
+  test("second call with same selection: no additionalContext, ledger unchanged", () => {
+    seedSelection(["tsx-rule.md"]);
+    captured = "";
+    runPreToolUse(stdin());
+    captured = "";
+    runPreToolUse(stdin());
+    expect(captured).toBe("{}");
+    expect(readInjectedLedger("sess-x", tmp)).toEqual(["tsx-rule.md"]);
+  });
+
+  test("selection grows: only new IDs injected with delta header", () => {
+    seedSelection(["tsx-rule.md"]);
+    captured = "";
+    runPreToolUse(stdin());
+    seedSelection(["tsx-rule.md", "ts-rule.md"]);
+    captured = "";
+    runPreToolUse(stdin());
+    const out: unknown = JSON.parse(captured);
+    if (typeof out !== "object" || out === null) {
+      throw new Error("expected object");
+    }
+    const hookOut = Reflect.get(out, "hookSpecificOutput");
+    if (typeof hookOut !== "object" || hookOut === null) {
+      throw new Error("expected hookSpecificOutput");
+    }
+    const ctx = Reflect.get(hookOut, "additionalContext");
+    expect(typeof ctx).toBe("string");
+    if (typeof ctx !== "string") return;
+    expect(ctx).toContain("# New Dynamic Rules (just added)");
+    expect(ctx).toContain("**IMPORTANT:**");
+    expect(ctx).toContain("Ts rule body.");
+    expect(ctx).not.toContain("Tsx rule body.");
+    expect(readInjectedLedger("sess-x", tmp)).toEqual([
+      "tsx-rule.md",
+      "ts-rule.md",
+    ]);
+  });
+
+  test("selection shrinks (LLM dropped a rule): no injection, ledger unchanged", () => {
+    seedSelection(["tsx-rule.md"]);
+    captured = "";
+    runPreToolUse(stdin());
+    seedSelection(["tsx-rule.md", "ts-rule.md"]);
+    captured = "";
+    runPreToolUse(stdin());
+    seedSelection(["tsx-rule.md"]);
+    captured = "";
+    runPreToolUse(stdin());
+    expect(captured).toBe("{}");
+    expect(readInjectedLedger("sess-x", tmp)).toEqual([
+      "tsx-rule.md",
+      "ts-rule.md",
+    ]);
   });
 });

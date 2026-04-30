@@ -2,8 +2,7 @@ import * as fs from "node:fs";
 import { readState } from "../cache.ts";
 import { deriveCacheKey } from "../paths.ts";
 import { subagentCachePath, ensureCacheDir } from "../cache.ts";
-import { formatRulesInjection } from "../inject.ts";
-import { unionAllSelected } from "../eval.ts";
+import { computeDeltaInjection } from "./delta-inject.ts";
 import { readSession } from "./user-prompt-submit.ts";
 import type { CacheState } from "../types.ts";
 
@@ -62,18 +61,12 @@ export function runSubagentStart(stdin: string): number {
   fs.writeFileSync(tmp, JSON.stringify(subState, null, 2), "utf8");
   fs.renameSync(tmp, subPath);
 
-  const ids = unionAllSelected(subState);
-  const injection = formatRulesInjection(ids, payload.cwd, {
-    isInitial: true,
-  });
-  const out = injection
-    ? {
-        hookSpecificOutput: {
-          hookEventName: "SubagentStart",
-          additionalContext: injection,
-        },
-      }
-    : {};
+  const out = computeDeltaInjection(
+    subState,
+    payload.session_id,
+    payload.cwd,
+    "SubagentStart",
+  );
   process.stdout.write(JSON.stringify(out));
   return 0;
 }

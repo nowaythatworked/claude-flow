@@ -1,9 +1,9 @@
 import * as fs from "node:fs";
 import * as path from "node:path";
-import { runFullEval, runPatternOnly, unionAllSelected } from "../eval.ts";
+import { runPatternOnly } from "../eval.ts";
 import { readState } from "../cache.ts";
 import { deriveCacheKey } from "../paths.ts";
-import { formatRulesInjection } from "../inject.ts";
+import { computeDeltaInjection } from "./delta-inject.ts";
 import type { CacheState } from "../types.ts";
 
 interface SessionRecord {
@@ -52,23 +52,17 @@ export async function runUserPromptSubmit(stdin: string): Promise<number> {
   });
 
   const fresh = readState(key, payload.cwd);
-  const ids = fresh ? unionAllSelected(fresh) : [];
-  const injection = formatRulesInjection(ids, payload.cwd, {
-    isInitial: true,
-  });
+  const out = computeDeltaInjection(
+    fresh,
+    payload.session_id,
+    payload.cwd,
+    "UserPromptSubmit",
+  );
 
   if (shouldKickAsync(prevState)) {
     spawnAsyncEval(payload, session);
   }
 
-  const out = injection
-    ? {
-        hookSpecificOutput: {
-          hookEventName: "UserPromptSubmit",
-          additionalContext: injection,
-        },
-      }
-    : {};
   process.stdout.write(JSON.stringify(out));
   return 0;
 }
