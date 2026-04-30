@@ -222,19 +222,16 @@ User authorized the flagged README staleness cleanup immediately after the agent
 
 ## Phase 8 — Production verification
 
-- [ ] Measure UserPromptSubmit gap on a fresh orbit session: target median <10s, p95 <20s
-- [ ] Measure PreToolUse hook latency: target <30ms p99
-- [ ] Confirm cache + eval-log files are populated
-- [ ] Confirm `/flow:approve` and `/flow:implement` checkpoints produce audit-shape output (enumerate rules + per-rule result)
-- [ ] Confirm subagent eval works independently in a delegated `flow:dev` task
-- [ ] Confirm branched sessions share cache correctly
-- [ ] Confirm recursion guard prevents nested `claude -p` from re-entering hooks
+Status: **deferred — handled via long-running orbit usage by user.** Removed from active plan.
 
 ## Phase 9 — Optional follow-ups
 
-- [ ] `/flow:rules-status` debugging skill (show current selection, watermark, last eval time, last trigger reason, recent log entries)
-- [ ] Telemetry surface in `/flow:phase` output
-- [ ] Periodic cache cleanup (subagent caches older than N days)
+Status: **complete** (commits 229cbe2, a77b7fe, c100bee, fbc48d5)
+
+- [x] `/flow:rules-status` debugging skill (show current selection, watermark, last eval time, last trigger reason, recent log entries) — `flow-rules state status` subcommand with default + `--brief` modes; reads cache, lock info, last 5 eval-log lines, optional injected-ledger size. Skill at `skills/rules-status/SKILL.md`. (229cbe2)
+- [x] Telemetry surface in `/flow:phase` output — `/flow:phase` now appends a one-line `state status --brief` summary under the phase report; best-effort, silent if errored. (a77b7fe)
+- [x] Periodic cache cleanup (subagent caches older than N days) — `flow-rules cleanup` sweeps orphan subagent caches, orphan injected ledgers, stale dead-PID locks, and truncates `eval-log.jsonl` / `pending-signals.jsonl` past configurable limits. Refuses to identify orphans when `SESSIONS.json` is missing. Default `--dry-run` flow via `/flow:cleanup` skill. Side effect: extracted `readSession` from hooks into a new `sessions.ts` module. (c100bee)
+- [x] Binary rebuild + closing-test pass: 156 pass / 0 fail / 312 expect() across 19 files. Real-claude integration tests skipped via FLOW_SKIP_REAL_CLAUDE=1. Binary ad-hoc codesigned. (fbc48d5)
 
 ## Out of scope (for now)
 
