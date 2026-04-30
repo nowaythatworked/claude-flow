@@ -52,6 +52,8 @@ These changes were agreed in conversation and superseded earlier sections of the
 | Rule body bodies passed to LLM eval | Only rule-id + `relevance` to LLM; full body loaded only at injection time | Smaller LLM input; clearer separation between "rule selection" and "rule injection" |
 | Mock claude in integration tests | Real claude via PATH (skippable via env) | User wants tests close to reality, OK with cost |
 | One commit binary in CI | Committed binary in repo, codesigned in build script | Zero-friction install for personal use; Gatekeeper SIGKILL workaround captured in build script |
+| Every hook injects full union of selected rules every time | Per-session injection ledger; hooks inject only delta vs ledger; first-ever injection uses an "initial" header, subsequent use a "new rules — scan history for prior" header | Avoids re-injecting same rule body on every tool call (massive context bloat); preserves rules across moving LLM-eval window — eval may "drop" a rule whose triggering context fell out of the watermark, but the rule stays in conversation history and remains active |
+| Phase 4 reminders point at vague "follow planning rules" text | Reminders point at explicit skill sections (§ 1, § 5, etc.) restructured in Phase 3, with re-invoke instruction if section content not recalled | Skill rework added named/numbered sections specifically so reminders can anchor at them — gives agent a clear pointer instead of restated rules |
 
 ## Phase 1 — Evaluator core
 
@@ -107,6 +109,39 @@ Design simplification during deep-dive: the original plan was to add thin shell 
 - **`subagent-inject.sh` still reads `/tmp/flow-rule-cache/last-selection-{session_id}.json`** (legacy bash cache path that no longer exists). It falls back to "load all dynamic rules" when the cache is missing, so it's functionally safe but inefficient. Phase 5 (SubagentStart integration) replaces this with the binary's `flow-rules hook subagent-start` and warm-starts from `.flow/rule-cache/`.
 - **End-to-end live verification** (see Phase 8) — measuring actual user-visible latency in orbit.
 
+## Phase 2.5 — Per-session injection ledger (delta-only injection)
+
+Status: **complete** (commits 86443c2, 3c6419e, 29814f9, 9a5364f, 34f5ded, 7a5ae8c)
+
+**Problem.** Today every UserPromptSubmit and PreToolUse hook injects the full union of currently-selected rules. After many tool calls, the same rule body has been re-pushed into context dozens of times. When the LLM eval drops a rule (because its watermark-bounded view no longer sees the original triggering context), the rule simply stops being re-injected — but the agent is never told that earlier-injected rules in conversation history remain active.
+
+**Goal.** Hooks inject only the **delta** vs what's already been injected to this session's conversation. Rules accumulate in conversation history; once injected, a rule is never re-injected and never explicitly "removed". The agent is told to scan ALL `Dynamic Rule [...]` blocks throughout history, not only the most recent injection.
+
+**Storage decision (Option A from planning):** separate per-session ledger file at `.flow/rule-cache/injected/<session_id>.json`. Decoupled from the eval cache to avoid lock contention. Race acceptable (rare double-injection of one block).
+
+### Tasks
+
+- [x] **`evaluator/src/injected-ledger.ts`** (new module)
+  Atomic tmp+rename ledger at `.flow/rule-cache/injected/<session_id>.json`. `readInjectedLedger` returns `[]` on missing/invalid (never throws). `appendInjected` is idempotent (no-op when no actual new IDs, doesn't bump `last_injection_ts`). `clearInjectedLedger` unlinks if exists. 14 tests in `injected-ledger.test.ts`. (86443c2)
+
+- [x] **`evaluator/src/inject.ts`** (update)
+  Signature changed to `formatRulesInjection(ids, cwd, { isInitial })`. `INITIAL_HEADER` for first-ever injection; `DELTA_HEADER` carries the bold IMPORTANT line telling the agent to scan all prior `Dynamic Rule [...]` blocks across conversation history. Existing tests adapted to pass `{ isInitial: true }`; 2 new tests assert the delta header content. (3c6419e)
+
+- [x] **Shared helper + hook wiring**
+  New `evaluator/src/hooks/delta-inject.ts` exports `computeDeltaInjection(state, sessionId, cwd, hookEventName)`. All three hooks (`user-prompt-submit.ts`, `pre-tool-use.ts`, `subagent-start.ts`) swapped to use it. Subagent uses its OWN session_id. Empty-injection guard prevents marking missing-rule-files as injected. Unused imports dropped. (29814f9)
+
+- [x] **Hook delta-semantics tests**
+  New `tests/user-prompt-submit.test.ts` (4 tests) + new `runPreToolUse delta injection` describe block in `tests/pre-tool-use.test.ts`. Both cover the four-step sequence: first → all + ledger written; repeat → `{}`; grow by one → only delta; shrink → `{}` (dropped rule stays in ledger). Use `tool_name: "Bash"` in pre-tool-use tests so selection is driven purely by `writeState`, not pattern matching. (29814f9)
+
+- [x] **`evaluator/src/cli.ts` — `eval --sync`** (update)
+  Stopped printing rule bodies to stdout. Now emits `[flow-rules] refreshed: N rules selected (task_type=...)` to stderr. Does not touch the ledger (avoids race with hooks; skills use `state show` + conversation history scan). (9a5364f)
+
+- [x] **`scripts/reset.sh` + `skills/reload-rules/SKILL.md`** (updates)
+  reset.sh: surgical per-sibling-session wipe of `<INJECT_DIR>/<sid>.json` after session-entry removal, before git auto-commit. reload-rules: added `rm -f .flow/rule-cache/injected/$CURRENT_SESSION_ID.json` step before the eval invocation, so the next hook injects fresh as initial set. (34f5ded)
+
+- [x] **Binary rebuild + full test suite green**
+  `bun run build` rebuilt + codesigned `bin/flow-rules`. Test suite: 135 pass / 0 fail / 242 expect() calls across 17 files. Real-claude integration tests skipped via `FLOW_SKIP_REAL_CLAUDE=1`. (7a5ae8c)
+
 ## Phase 3 — Skill rework
 
 Status: **complete** (commit e6fd187)
@@ -130,18 +165,44 @@ Six SKILL.md files reworked. Anchor names locked (no em dashes anywhere): `Check
 
 ## Phase 4 — Phase-aware reminders
 
-- [ ] Rewrite `scripts/phase-gate.sh` to read SESSIONS.json (phase + focus + task_file)
-- [ ] Emit dynamic reminder per state: planning → /flow:build § Checkpoint; planned no-focus → /flow:next § Deep-dive process; planned + focus → /flow:next § Checkpoint; implementing → /flow:implement § Implementation rules
-- [ ] Reminder template: terse pointer + section name + "if you cannot recall, re-invoke /flow:<skill> or Read SKILL.md"
-- [ ] Drop the bloated rule-summary text; reminders point, don't teach
-- [ ] Update `inject-session-rules.sh` if it overlaps
+Phase 3 restructured the skills with named/numbered sections specifically so reminders can anchor at them. The new `phase-gate.sh` points the agent at exact `§ <number> <heading>` references rather than restating planning rules. The `rule-reminder.sh` is also strengthened to make rule-history persistence (Phase 2.5's model) explicit.
+
+### Tasks
+
+- [ ] **`scripts/phase-gate.sh`** (rewrite)
+  - Existing inputs (SESSIONS.json read, sessionTitle emission, /flow: command skip) retained
+  - Replace each phase's reminder text with skill-section-anchored pointer:
+    - **planning**: "**Phase: planning.** Follow `/flow:build` § 1 (Understand), § 2 (Plan in conversation), § 3 (Explore impact), § 4 (Self-check & iterate). Before suggesting `/flow:approve`, you MUST run § 5 (Checkpoint before /flow:approve) — every time, even if you ran it earlier in this conversation. If you can't recall a section, re-invoke `/flow:build` or Read `${CLAUDE_PLUGIN_ROOT}/skills/build/SKILL.md`."
+    - **planned (no focus)**: "**Phase: planned.** Follow `/flow:next` § 1 (Orient & lock), § 2 (Analyze), § 3 (Suggest), § 4 (Set focus). After picking focus, proceed to § 5 (Deep-dive process). If you can't recall a section, re-invoke `/flow:next` or Read `${CLAUDE_PLUGIN_ROOT}/skills/next/SKILL.md`."
+    - **planned (with focus)**: "**Phase: planned | Focus: ${FOCUS}.** Follow `/flow:next` § 5 (Deep-dive process), § 6 (Self-check & iterate). Before suggesting `/flow:implement`, you MUST run § 7 (Checkpoint before /flow:implement) — every time. If you can't recall a section, re-invoke `/flow:next` or Read `${CLAUDE_PLUGIN_ROOT}/skills/next/SKILL.md`."
+    - **implementing**: "**Phase: implementing.** Follow `/flow:implement` § Implementation rules and § 1 (Validate), § 2 (Transition), § 3 (Create granular tasks), § 4 (Execute), § 5 (Document), § 6 (Suggest next). When done, suggest `/flow:next`. If you can't recall a section, re-invoke `/flow:implement` or Read `${CLAUDE_PLUGIN_ROOT}/skills/implement/SKILL.md`."
+  - Section-name strings must match the skill anchor headings byte-for-byte (no em dashes, no separator drift) — Phase 3 locked these
+  - `tests/test-scripts.sh` cases covering each state branch
+
+- [ ] **`scripts/rule-reminder.sh`** (update)
+  - Replace existing single-line reminder with rule-history-aware text:
+    > "**Quality rules are active.** Look for `--- Rule [...] ---` and `--- Dynamic Rule [...] ---` blocks throughout your conversation history (not just the most recent injection — dynamic rules accumulate over the session and earlier ones remain in effect). If you cannot find them or they have been lost to context compression, run `/flow:reload-rules`."
+  - Keep stdin guard, FLOW_NO_HOOKS short-circuit, jq fallback as-is
+
+- [ ] **`skills/reload-rules/SKILL.md`** (light touch)
+  - Add step: clear injection ledger first (`rm -f .flow/rule-cache/injected/$CURRENT_SESSION_ID.json`) so the subsequent `flow-rules eval --sync` injects everything fresh as initial set
+  - Existing eval + state show + body re-read steps retained
 
 ## Phase 5 — SubagentStart integration
 
-- [ ] Update `subagent-inject.sh` to read parent's `(task_file, focus_hash)` cache and write a fresh `sub__<parent>__<agent>.json` cache file warm-started with parent's `selected_rules`
-- [ ] Subagent's own UserPromptSubmit / PreToolUse hooks operate on its own cache file keyed by its session_id
-- [ ] Subagent transcript discovered at `<parent_session>/subagents/agent-<id>.jsonl`
-- [ ] Cleanup: subagent cache files included in periodic sweep
+The binary's `flow-rules hook subagent-start` (already implemented in Phase 1, with delta-injection added in Phase 2.5) replaces the legacy bash `subagent-inject.sh`. This pulls subagents onto the same delta-injection + ledger model as parents.
+
+### Tasks
+
+- [ ] **`hooks/hooks.json`** (update)
+  - Replace `SubagentStart` entry's command from `${CLAUDE_PLUGIN_ROOT}/scripts/subagent-inject.sh` to `${CLAUDE_PLUGIN_ROOT}/bin/flow-rules hook subagent-start`
+  - Timeout 5 (was 10)
+
+- [ ] **`scripts/subagent-inject.sh`** (delete)
+  - Verify no other callers via grep before deletion
+  - The legacy `/tmp/flow-rule-cache/last-selection-{session_id}.json` cache path is also retired (binary uses `.flow/rule-cache/`)
+
+- [ ] **End-to-end check**: spawn a subagent (via `flow:dev` Task call), verify its first message receives an "Initial dynamic rules" block with the warm-started parent selection, verify subsequent tool calls don't re-inject the same rules
 
 ## Phase 6 — Retire rule-evaluator agent
 
