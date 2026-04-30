@@ -5,8 +5,8 @@
         "hooks": [
           {
             "type": "command",
-            "command": "${CLAUDE_PLUGIN_ROOT}/scripts/subagent-inject.sh",
-            "timeout": 10
+            "command": "${CLAUDE_PLUGIN_ROOT}/bin/flow-rules hook subagent-start",
+            "timeout": 5
           }
         ]
       }
