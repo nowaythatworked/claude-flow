@@ -63,7 +63,9 @@ export function runSubagentStart(stdin: string): number {
   fs.renameSync(tmp, subPath);
 
   const ids = unionAllSelected(subState);
-  const injection = formatRulesInjection(ids, payload.cwd);
+  const injection = formatRulesInjection(ids, payload.cwd, {
+    isInitial: true,
+  });
   const out = injection
     ? {
         hookSpecificOutput: {

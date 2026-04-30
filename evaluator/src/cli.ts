@@ -116,7 +116,9 @@ async function cmdEval(parsed: ParsedArgs): Promise<number> {
     return 0;
   }
   const ids = unionAllSelected(result.state);
-  const injection = formatRulesInjection(ids, path.resolve(cwd));
+  const injection = formatRulesInjection(ids, path.resolve(cwd), {
+    isInitial: true,
+  });
   if (injection !== "") process.stdout.write(injection);
   return 0;
 }

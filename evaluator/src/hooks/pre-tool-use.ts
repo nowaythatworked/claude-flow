@@ -61,7 +61,9 @@ export function runPreToolUse(stdin: string): number {
 
   const fresh = readState(key, payload.cwd);
   const ids = fresh ? unionAllSelected(fresh) : [];
-  const injection = formatRulesInjection(ids, payload.cwd);
+  const injection = formatRulesInjection(ids, payload.cwd, {
+    isInitial: true,
+  });
 
   if (shouldKickAsync(prevState)) {
     spawnAsyncEval(payload, session.task_file, session.focus);
