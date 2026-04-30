@@ -207,9 +207,12 @@ The flow:rule-evaluator agent has been superseded by the `flow-rules` binary in 
 - [x] Skill invocations: nothing to remove. Verified by grep — Phase 3 commit e6fd187 already replaced agent invocations with `flow-rules eval --sync` calls in `skills/reload-rules/SKILL.md` and `skills/build/SKILL.md`.
 - [x] Final grep confirms no residual references outside known false positives: `evaluator/src/cli.ts:213` (binary self-description), `.claude/settings.local.json` (auto-generated permission entry from `rm` invocation).
 
-### Out of scope, flagged for follow-up
+### Adjacent doc cleanup (commit c15dfef)
 
-- README.md hooks table (lines 148-153) still describes the **old Sonnet eval behavior** ("Sonnet evaluates which dynamic rules apply", "Every 15 tool uses Re-evaluates dynamic rules based on transcript"). These don't name `rule-evaluator` directly so are out of strict Phase 6 scope, but are stale post-Phases 1-2 and worth a separate doc-cleanup task.
+User authorized the flagged README staleness cleanup immediately after the agent retirement. Same commit-trail boundary, separate concern:
+
+- README hooks table (was lines 148-153): replaced "Sonnet evaluates which dynamic rules apply", "Every 15 tool uses Re-evaluates dynamic rules", and "PostToolUse phase guard" with the actual post-rebuild model (Haiku via `flow-rules` binary; sync pattern+keyword + async debounced LLM; phase guard on PreToolUse; new PreToolUse signals/eval row).
+- README "Dynamic Rules" section (was line 54): replaced `description:` frontmatter mention and Sonnet/every-15-tool-uses prose with the three signal fields (`patterns`, `keywords`, `relevance`), the actual sync+async trigger model, and the per-session delta-injection ledger.
 
 ## Phase 7 — Rule frontmatter migration
 
