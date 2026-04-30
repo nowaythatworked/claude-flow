@@ -1,8 +1,7 @@
 import * as path from "node:path";
-import { runFullEval, runPatternOnly, unionAllSelected } from "./eval.ts";
+import { runFullEval, unionAllSelected } from "./eval.ts";
 import { readState } from "./cache.ts";
 import { deriveCacheKey, stateFilePath } from "./paths.ts";
-import { formatRulesInjection } from "./inject.ts";
 import { runUserPromptSubmit } from "./hooks/user-prompt-submit.ts";
 import { runPreToolUse } from "./hooks/pre-tool-use.ts";
 import { runSubagentStart } from "./hooks/subagent-start.ts";
@@ -116,10 +115,9 @@ async function cmdEval(parsed: ParsedArgs): Promise<number> {
     return 0;
   }
   const ids = unionAllSelected(result.state);
-  const injection = formatRulesInjection(ids, path.resolve(cwd), {
-    isInitial: true,
-  });
-  if (injection !== "") process.stdout.write(injection);
+  process.stderr.write(
+    `[flow-rules] refreshed: ${ids.length} rules selected (task_type=${result.state.task_type})\n`,
+  );
   return 0;
 }
 
