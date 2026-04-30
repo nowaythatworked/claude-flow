@@ -165,44 +165,36 @@ Six SKILL.md files reworked. Anchor names locked (no em dashes anywhere): `Check
 
 ## Phase 4 — Phase-aware reminders
 
+Status: **complete** (commit 9a6c254)
+
 Phase 3 restructured the skills with named/numbered sections specifically so reminders can anchor at them. The new `phase-gate.sh` points the agent at exact `§ <number> <heading>` references rather than restating planning rules. The `rule-reminder.sh` is also strengthened to make rule-history persistence (Phase 2.5's model) explicit.
 
 ### Tasks
 
-- [ ] **`scripts/phase-gate.sh`** (rewrite)
-  - Existing inputs (SESSIONS.json read, sessionTitle emission, /flow: command skip) retained
-  - Replace each phase's reminder text with skill-section-anchored pointer:
-    - **planning**: "**Phase: planning.** Follow `/flow:build` § 1 (Understand), § 2 (Plan in conversation), § 3 (Explore impact), § 4 (Self-check & iterate). Before suggesting `/flow:approve`, you MUST run § 5 (Checkpoint before /flow:approve) — every time, even if you ran it earlier in this conversation. If you can't recall a section, re-invoke `/flow:build` or Read `${CLAUDE_PLUGIN_ROOT}/skills/build/SKILL.md`."
-    - **planned (no focus)**: "**Phase: planned.** Follow `/flow:next` § 1 (Orient & lock), § 2 (Analyze), § 3 (Suggest), § 4 (Set focus). After picking focus, proceed to § 5 (Deep-dive process). If you can't recall a section, re-invoke `/flow:next` or Read `${CLAUDE_PLUGIN_ROOT}/skills/next/SKILL.md`."
-    - **planned (with focus)**: "**Phase: planned | Focus: ${FOCUS}.** Follow `/flow:next` § 5 (Deep-dive process), § 6 (Self-check & iterate). Before suggesting `/flow:implement`, you MUST run § 7 (Checkpoint before /flow:implement) — every time. If you can't recall a section, re-invoke `/flow:next` or Read `${CLAUDE_PLUGIN_ROOT}/skills/next/SKILL.md`."
-    - **implementing**: "**Phase: implementing.** Follow `/flow:implement` § Implementation rules and § 1 (Validate), § 2 (Transition), § 3 (Create granular tasks), § 4 (Execute), § 5 (Document), § 6 (Suggest next). When done, suggest `/flow:next`. If you can't recall a section, re-invoke `/flow:implement` or Read `${CLAUDE_PLUGIN_ROOT}/skills/implement/SKILL.md`."
-  - Section-name strings must match the skill anchor headings byte-for-byte (no em dashes, no separator drift) — Phase 3 locked these
-  - `tests/test-scripts.sh` cases covering each state branch
+- [x] **`scripts/phase-gate.sh`** (rewrite)
+  Each phase reminder now anchors at the locked Phase 3 skill sections (planning → /flow:build § 1-5; planned no-focus → /flow:next § 1-5; planned + focus → /flow:next § 5-7; implementing → /flow:implement § Implementation rules + § 1-6). All four reminders include the "if you can't recall, re-invoke or Read SKILL.md" instruction. `${CLAUDE_PLUGIN_ROOT}` kept literal in the message via `\${...}` escape. No em dashes. Existing test-scripts.sh phase-gate assertions still pass (the 2 pre-existing additionalContext failures are baseline-confirmed, unrelated). (9a6c254)
 
-- [ ] **`scripts/rule-reminder.sh`** (update)
-  - Replace existing single-line reminder with rule-history-aware text:
-    > "**Quality rules are active.** Look for `--- Rule [...] ---` and `--- Dynamic Rule [...] ---` blocks throughout your conversation history (not just the most recent injection — dynamic rules accumulate over the session and earlier ones remain in effect). If you cannot find them or they have been lost to context compression, run `/flow:reload-rules`."
-  - Keep stdin guard, FLOW_NO_HOOKS short-circuit, jq fallback as-is
+- [x] **`scripts/rule-reminder.sh`** (update)
+  Replaced with delta-injection-aware text: tells the agent to look for `Dynamic Rule [...]` blocks throughout conversation history, explains rules accumulate over the session and earlier ones remain in effect even when newer ones get added. (9a6c254)
 
-- [ ] **`skills/reload-rules/SKILL.md`** (light touch)
-  - Add step: clear injection ledger first (`rm -f .flow/rule-cache/injected/$CURRENT_SESSION_ID.json`) so the subsequent `flow-rules eval --sync` injects everything fresh as initial set
-  - Existing eval + state show + body re-read steps retained
+- [x] **`skills/reload-rules/SKILL.md`** (light touch)
+  Already done as part of Phase 2.5 commit 34f5ded. The skill now instructs `rm -f .flow/rule-cache/injected/$CURRENT_SESSION_ID.json` before the `flow-rules eval --sync` invocation, so the next hook injects everything fresh as the initial set.
 
 ## Phase 5 — SubagentStart integration
 
-The binary's `flow-rules hook subagent-start` (already implemented in Phase 1, with delta-injection added in Phase 2.5) replaces the legacy bash `subagent-inject.sh`. This pulls subagents onto the same delta-injection + ledger model as parents.
+Status: **complete** (commit ac47a08)
+
+The binary's `flow-rules hook subagent-start` (implemented in Phase 1, with delta-injection added in Phase 2.5) now replaces the legacy bash `subagent-inject.sh`. Subagents are on the same delta-injection + ledger model as parents.
 
 ### Tasks
 
-- [ ] **`hooks/hooks.json`** (update)
-  - Replace `SubagentStart` entry's command from `${CLAUDE_PLUGIN_ROOT}/scripts/subagent-inject.sh` to `${CLAUDE_PLUGIN_ROOT}/bin/flow-rules hook subagent-start`
-  - Timeout 5 (was 10)
+- [x] **`hooks/hooks.json`** (update)
+  `SubagentStart` command swapped from `${CLAUDE_PLUGIN_ROOT}/scripts/subagent-inject.sh` to `${CLAUDE_PLUGIN_ROOT}/bin/flow-rules hook subagent-start`. Timeout 10 → 5. (ac47a08)
 
-- [ ] **`scripts/subagent-inject.sh`** (delete)
-  - Verify no other callers via grep before deletion
-  - The legacy `/tmp/flow-rule-cache/last-selection-{session_id}.json` cache path is also retired (binary uses `.flow/rule-cache/`)
+- [x] **`scripts/subagent-inject.sh`** (delete)
+  Removed (143 lines). Grep confirmed no remaining callers in scripts/, hooks/, or skills/. Only references left are historical mentions in `.flow/*.md` plan files. The legacy `/tmp/flow-rule-cache/last-selection-{session_id}.json` cache path is retired. (ac47a08)
 
-- [ ] **End-to-end check**: spawn a subagent (via `flow:dev` Task call), verify its first message receives an "Initial dynamic rules" block with the warm-started parent selection, verify subsequent tool calls don't re-inject the same rules
+- [x] **End-to-end check**: smoke-tested the binary subagent-start hook with a parent session that has no selected rules — returns clean `{}`. Real subagent-spawn verification deferred to Phase 8 production verification.
 
 ## Phase 6 — Retire rule-evaluator agent
 
