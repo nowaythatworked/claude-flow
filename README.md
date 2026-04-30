@@ -49,9 +49,15 @@ Injected into every session via `SessionStart` hook and into every subagent via 
 
 These are starting points. Delete rules you disagree with, rewrite them to match your team's standards, or add new ones. Each project maintains its own copy in `.flow/rules/always/`.
 
-### Dynamic Rules (LLM-Evaluated)
+### Dynamic Rules (presence-inferred selection)
 
-Live in `.flow/rules/dynamic/`. Each has a `description:` frontmatter. Sonnet evaluates relevance on each substantial prompt and periodically during work (every 15 tool uses, reading the conversation transcript). Only loaded when relevant — a project with 30 dynamic rules still keeps context lean because only 2-3 matching the current task are loaded.
+Live in `.flow/rules/dynamic/`. Each rule declares any combination of three signal fields in frontmatter:
+
+- `patterns:` — file globs matched against paths the agent touches (e.g. `**/*.tsx`)
+- `keywords:` — case-insensitive substrings matched against recent user text and tool args
+- `relevance:` — one-line description used by Haiku to decide when the rule applies
+
+Selection runs on every UserPromptSubmit and on every PreToolUse(Edit|Write|Read|Glob|Grep): pattern and keyword matches are synchronous; the LLM pass (Haiku, watermark-bounded transcript digest) runs async in the background, debounced to 30s minimum spacing. Only matched rules are loaded — a project with 30 dynamic rules still keeps context lean because only the few matching the current task are injected. A per-session ledger ensures the same rule body is never re-injected; rules accumulate in conversation history and remain in effect.
 
 ### Rules Grow With Your Project
 
@@ -144,13 +150,13 @@ Branch detection is automatic — the `SessionStart` hook detects branched sessi
 |------|------|------|
 | `SessionStart` | Start + compaction | Injects always-on rules, survives context compression |
 | `SessionStart` | Resume (branch) | Auto-detects branched `/flow:build` sessions, registers with parent tracking |
-| `SubagentStart` | Every agent spawn | Injects quality rules directly into subagent context |
-| `UserPromptSubmit` | Every prompt | Rule reminder: follow injected rules, `/flow:reload-rules` if lost |
-| `UserPromptSubmit` | Every prompt | Phase-aware reminder with focus context (only for registered sessions) |
-| `UserPromptSubmit` | Substantial prompts | Sonnet evaluates which dynamic rules apply |
-| `PostToolUse` | After Write/Edit | Phase guard: blocks code writes during planning and planned phases |
+| `SubagentStart` | Every agent spawn | Warm-starts subagent rule selection from parent's cache; delta-injects rules into subagent context |
+| `UserPromptSubmit` | Every prompt | Rule reminder: scan history for accumulated `Dynamic Rule [...]` blocks |
+| `UserPromptSubmit` | Every prompt | Phase-aware reminder, anchored to skill sections (only for registered sessions) |
+| `UserPromptSubmit` | Every prompt | Refreshes dynamic rule selection (`flow-rules` binary; Haiku over a watermark-bounded transcript digest); delta-injects new rule bodies via per-session ledger |
+| `PreToolUse` | Before Write/Edit | Phase guard: blocks code writes during planning and planned phases |
+| `PreToolUse` | Before Edit/Write/Read/Glob/Grep | Sync pattern + keyword match on tool input; appends to pending-signals; kicks off async LLM eval (30s debounce) |
 | `PostToolUse` | After Write/Edit | Scans for `any` types, unsafe assertions, `@ts-ignore` |
-| `PostToolUse` | Every 15 tool uses | Re-evaluates dynamic rules based on transcript |
 
 ### Custom Agents
 
