@@ -48,7 +48,7 @@ if [ "$HAS_RULES" = false ]; then
 fi
 
 # --- Build reminder ---
-CONTEXT='**Quality rules are active.** Rules have been injected into your context — look for `--- Rule [...] ---` and `--- Dynamic Rule [...] ---` blocks. Follow all of them. If you cannot find them or they have been lost to context compression, run `/flow:reload-rules` to re-read them.'
+CONTEXT='**Quality rules are active.** Look for `--- Rule [...] ---` and `--- Dynamic Rule [...] ---` blocks throughout your conversation history, not only the most recent injection. Dynamic rules accumulate over the session, so earlier `Dynamic Rule [...]` blocks remain in effect even when newer ones get added. Follow all of them. If you cannot find them or they have been lost to context compression, run `/flow:reload-rules` to re-read them.'
 
 # --- Output ---
 if command -v jq &>/dev/null; then

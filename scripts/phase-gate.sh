@@ -77,20 +77,20 @@ else
   case "$PHASE" in
     planning)
       CONTEXT="${SESSION_HINT}
-**Phase: planning.** Follow /flow:build planning rules — understand deeply, plan in conversation. No code writes. Keep questioning yourself: Do you understand enough? Have you searched for side-effects, affected areas, and new possibilities? Is the plan solid enough to approve? If not, keep iterating. When genuinely confident, suggest the user runs /flow:approve."
+**Phase: planning.** Follow \`/flow:build\` § 1 (Understand), § 2 (Plan in conversation), § 3 (Explore impact), § 4 (Self-check & iterate). Before suggesting \`/flow:approve\`, you MUST run § 5 (Checkpoint before /flow:approve), every time, even if you ran it earlier in this conversation. If you can't recall a section, re-invoke \`/flow:build\` or Read \`\${CLAUDE_PLUGIN_ROOT}/skills/build/SKILL.md\`."
       ;;
     planned)
       if [ -n "$FOCUS" ]; then
         CONTEXT="${SESSION_HINT}
-**Phase: planned | Focus: ${FOCUS}.** Follow /flow:next deep-dive rules — research thoroughly, think through edge cases. No code writes. Keep iterating: ask yourself if you are confident enough to implement this correctly. If not, dig deeper or ask. When confident, suggest the user runs /flow:implement."
+**Phase: planned | Focus: ${FOCUS}.** Follow \`/flow:next\` § 5 (Deep-dive process), § 6 (Self-check & iterate). Before suggesting \`/flow:implement\`, you MUST run § 7 (Checkpoint before /flow:implement), every time. If you can't recall a section, re-invoke \`/flow:next\` or Read \`\${CLAUDE_PLUGIN_ROOT}/skills/next/SKILL.md\`."
       else
         CONTEXT="${SESSION_HINT}
-**Phase: planned.** Follow /flow:build planned-phase rules. Suggest the user runs /flow:next or tells you which tasks to focus on. Deep-dive before implementing."
+**Phase: planned.** Follow \`/flow:next\` § 1 (Orient & lock), § 2 (Analyze), § 3 (Suggest), § 4 (Set focus). After picking focus, proceed to § 5 (Deep-dive process). If you can't recall a section, re-invoke \`/flow:next\` or Read \`\${CLAUDE_PLUGIN_ROOT}/skills/next/SKILL.md\`."
       fi
       ;;
     implementing)
       CONTEXT="${SESSION_HINT}
-**Phase: implementing.** Follow /flow:build implementation rules — delegate substantial work, verify results. When tasks are complete, suggest the user runs /flow:next for the next task."
+**Phase: implementing.** Follow \`/flow:implement\` § Implementation rules and § 1 (Validate), § 2 (Transition), § 3 (Create granular tasks), § 4 (Execute), § 5 (Document), § 6 (Suggest next). When done, suggest \`/flow:next\`. If you can't recall a section, re-invoke \`/flow:implement\` or Read \`\${CLAUDE_PLUGIN_ROOT}/skills/implement/SKILL.md\`."
       ;;
     *)
       echo '{}'
