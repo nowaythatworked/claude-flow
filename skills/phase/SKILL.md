@@ -20,6 +20,14 @@ Invoked as `/flow:phase`.
    - `planned` (with focus) — "**Planned | Focus: [tasks].** Deep-diving. → `/flow:implement` when ready."
    - `implementing` (with focus) — "**Implementing: [tasks].** Code writes unlocked. → `/flow:next` when done."
 
+   Then append a brief rule-status line. Capture the output of:
+   ```bash
+   TASK=$("${CLAUDE_PLUGIN_ROOT}/scripts/session.sh" . "$CURRENT_SESSION_ID" --get-task)
+   FOCUS=$("${CLAUDE_PLUGIN_ROOT}/scripts/session.sh" . "$CURRENT_SESSION_ID" --get-focus)
+   "${CLAUDE_PLUGIN_ROOT}/bin/flow-rules" state status --cwd . --task-file "$TASK" --focus "$FOCUS" --brief 2>/dev/null || true
+   ```
+   If the brief output is non-empty, append it as a second line under the phase report. If empty or errored, skip silently — telemetry is best-effort.
+
 3. **If NOT registered**, attempt self-heal:
 
    a. Run branch detection: `"${CLAUDE_PLUGIN_ROOT}/scripts/branch-detect.sh"` — pipe the following JSON to stdin:
