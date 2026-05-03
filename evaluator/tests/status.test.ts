@@ -7,6 +7,7 @@ import { writeState, initState } from "../src/cache.ts";
 import {
   cacheDir,
   deriveCacheKey,
+  deriveSessionCacheKey,
   evalLogPath,
   lockDirPath,
 } from "../src/paths.ts";
@@ -238,5 +239,50 @@ describe("formatStatus", () => {
       brief: false,
     });
     expect(out).toContain("Lock: not held");
+  });
+
+  test("vanilla session: empty taskFile/focus → uses session__<id> key", () => {
+    const sid = "vanilla-status-1";
+    // Seed state under session__-keyed cache.
+    const s = initState("", [], tmp);
+    s.task_type = "ad-hoc";
+    s.trigger_reason = "user-prompt-submit-sync:vanilla";
+    s.last_eval_ts = new Date(Date.now() - 5_000).toISOString();
+    s.last_eval_duration_ms = 17;
+    s.selected_via_keyword = ["foo.md"];
+    const { key } = deriveSessionCacheKey(sid);
+    writeState(key, s, tmp);
+
+    const out = formatStatus({
+      cwd: tmp,
+      taskFile: "",
+      focus: [],
+      sessionId: sid,
+      brief: false,
+    });
+    expect(out).toContain(`session__${sid}.json`);
+    expect(out).toContain("via keyword: foo.md");
+    expect(out).toContain("Task type: ad-hoc");
+  });
+
+  test("vanilla session: brief output uses session__<id> key", () => {
+    const sid = "vanilla-status-brief";
+    const s = initState("", [], tmp);
+    s.last_eval_ts = new Date(Date.now() - 1_000).toISOString();
+    s.selected_via_pattern = ["a.md"];
+    const { key } = deriveSessionCacheKey(sid);
+    writeState(key, s, tmp);
+
+    const out = formatStatus({
+      cwd: tmp,
+      taskFile: "",
+      focus: [],
+      sessionId: sid,
+      brief: true,
+    });
+    const trimmed = out.trim();
+    expect(trimmed.split("\n").length).toBe(1);
+    expect(trimmed).toContain("1 rules selected");
+    expect(trimmed).toContain("1 pattern");
   });
 });

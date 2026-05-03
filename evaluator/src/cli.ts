@@ -213,22 +213,34 @@ async function cmdState(parsed: ParsedArgs): Promise<number> {
     return 2;
   }
   const cwd = path.resolve(parsed.flags.get("cwd") ?? process.cwd());
-  const taskFile = parsed.flags.get("task-file") ?? "unknown.md";
-  const focus = parseFocus(parsed.flags.get("focus"));
-  const { key } = deriveCacheKey(taskFile, focus);
+  const taskFileFlag = parsed.flags.get("task-file");
+  const focusFlag = parsed.flags.get("focus");
+  const sessionIdRaw = parsed.flags.get("session-id");
+  const sessionId =
+    sessionIdRaw !== undefined && sessionIdRaw !== "" ? sessionIdRaw : null;
+
+  // Vanilla auto-derive: when no task-file/focus, derive session__<id> key.
+  // Falls through to taskFile-keyed path otherwise.
+  const isVanilla =
+    (taskFileFlag === undefined || taskFileFlag === "") &&
+    (focusFlag === undefined || focusFlag === "[]" || focusFlag === "") &&
+    sessionId !== null;
+
+  const taskFile = taskFileFlag ?? "unknown.md";
+  const focus = parseFocus(focusFlag);
+  const key = isVanilla
+    ? deriveSessionCacheKey(sessionId).key
+    : deriveCacheKey(taskFile, focus).key;
 
   if (sub === "path") {
     process.stdout.write(`${stateFilePath(key, cwd)}\n`);
     return 0;
   }
   if (sub === "status") {
-    const sessionIdRaw = parsed.flags.get("session-id");
-    const sessionId =
-      sessionIdRaw !== undefined && sessionIdRaw !== "" ? sessionIdRaw : null;
     const out = formatStatus({
       cwd,
-      taskFile,
-      focus,
+      taskFile: isVanilla ? "" : taskFile,
+      focus: isVanilla ? [] : focus,
       sessionId,
       brief: parsed.bools.has("brief"),
     });
@@ -355,12 +367,19 @@ function printHelp(): void {
 Usage:
   flow-rules eval [--sync|--async] --reason <r> --cwd <p> --session-id <id>
                   [--transcript <path>] [--task-file <name>] [--focus <json>]
+                  [--cache-key <key>]
+                  (when --task-file and --focus omitted, key is auto-derived
+                   to session__<session-id> for vanilla sessions)
   flow-rules hook <user-prompt-submit|pre-tool-use|subagent-start>
                   (reads JSON payload from stdin)
   flow-rules state show [--cwd <p>] [--task-file <name>] [--focus <json>]
+                        [--session-id <id>]
   flow-rules state path [--cwd <p>] [--task-file <name>] [--focus <json>]
+                        [--session-id <id>]
   flow-rules state status [--cwd <p>] [--task-file <name>] [--focus <json>]
                           [--session-id <id>] [--brief]
+                  (when --task-file and --focus omitted but --session-id is
+                   set, looks up session__<session-id> cache)
   flow-rules cleanup [--cwd <p>] [--dry-run] [--max-eval-log <N>]
                      [--max-pending-signals <N>] [--max-vanilla-cache-age-days <N>]
 `);

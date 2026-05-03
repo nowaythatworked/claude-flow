@@ -3,6 +3,7 @@ import * as path from "node:path";
 import { readState } from "./cache.ts";
 import {
   deriveCacheKey,
+  deriveSessionCacheKey,
   evalLogPath,
   lockDirPath,
   stateFilePath,
@@ -19,7 +20,15 @@ export interface FormatStatusOpts {
 }
 
 export function formatStatus(opts: FormatStatusOpts): string {
-  const { key } = deriveCacheKey(opts.taskFile, opts.focus);
+  // When task-file/focus are absent (vanilla session), key on session id.
+  const isVanilla =
+    (opts.taskFile === "" || opts.taskFile === "unknown.md") &&
+    opts.focus.length === 0 &&
+    opts.sessionId !== null &&
+    opts.sessionId !== "";
+  const key = isVanilla
+    ? deriveSessionCacheKey(opts.sessionId).key
+    : deriveCacheKey(opts.taskFile, opts.focus).key;
   const state = readState(key, opts.cwd);
   if (!state) {
     return "(no state)\n";
