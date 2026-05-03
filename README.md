@@ -55,9 +55,9 @@ Live in `.flow/rules/dynamic/`. Each rule declares any combination of three sign
 
 - `patterns:` — file globs matched against paths the agent touches (e.g. `**/*.tsx`)
 - `keywords:` — case-insensitive substrings matched against recent user text and tool args
-- `relevance:` — one-line description used by Haiku to decide when the rule applies
+- `relevance:` — one-line description used by the eval LLM to decide when the rule applies
 
-Selection runs on every UserPromptSubmit and on every PreToolUse(Edit|Write|Read|Glob|Grep): pattern and keyword matches are synchronous; the LLM pass (Haiku, watermark-bounded transcript digest) runs async in the background, debounced to 30s minimum spacing. Only matched rules are loaded — a project with 30 dynamic rules still keeps context lean because only the few matching the current task are injected. A per-session ledger ensures the same rule body is never re-injected; rules accumulate in conversation history and remain in effect.
+Selection runs on every UserPromptSubmit and on every PreToolUse(Edit|Write|Read|Glob|Grep): pattern and keyword matches are synchronous; the LLM pass over a watermark-bounded transcript digest runs async in the background, debounced to 30s minimum spacing. Routine evals use Haiku for speed and cost; the synchronous `/flow:approve` and `/flow:implement` checkpoints upgrade to Sonnet for higher-quality plan-vs-rules cross-checks. Only matched rules are loaded — a project with 30 dynamic rules still keeps context lean because only the few matching the current task are injected. A per-session ledger ensures the same rule body is never re-injected; rules accumulate in conversation history and remain in effect.
 
 Dynamic rules work in **any** Claude Code session, not just `/flow:build` workflows. Sessions without a `SESSIONS.json` entry are keyed under `session__<session-id>` and treated as vanilla — pattern/keyword/LLM selection still fires, hooks still inject. Workflow-specific behavior (phase reminders, plan-vs-implement write protection) cleanly no-ops when there's no flow workflow active. See [`docs/evaluator.md`](./docs/evaluator.md) for the gating model.
 
@@ -155,7 +155,7 @@ Branch detection is automatic — the `SessionStart` hook detects branched sessi
 | `SubagentStart` | Every agent spawn | Warm-starts subagent rule selection from parent's cache; delta-injects rules into subagent context |
 | `UserPromptSubmit` | Every prompt | Rule reminder: scan history for accumulated `Dynamic Rule [...]` blocks |
 | `UserPromptSubmit` | Every prompt | Phase-aware reminder, anchored to skill sections (only for registered sessions) |
-| `UserPromptSubmit` | Every prompt | Refreshes dynamic rule selection (`flow-rules` binary; Haiku over a watermark-bounded transcript digest); delta-injects new rule bodies via per-session ledger. Works in flow and vanilla sessions. |
+| `UserPromptSubmit` | Every prompt | Refreshes dynamic rule selection (`flow-rules` binary; Haiku over a watermark-bounded transcript digest, Sonnet at `/flow:approve` / `/flow:implement` checkpoints); delta-injects new rule bodies via per-session ledger. Works in flow and vanilla sessions. |
 | `PreToolUse` | Before Write/Edit | Phase guard: blocks code writes during planning and planned phases (flow sessions only) |
 | `PreToolUse` | Before Edit/Write/Read/Glob/Grep | Sync pattern + keyword match on tool input; appends to pending-signals; kicks off async LLM eval (30s debounce). Works in flow and vanilla sessions. |
 | `PostToolUse` | After Write/Edit | Scans for `any` types, unsafe assertions, `@ts-ignore` |
@@ -265,7 +265,7 @@ GSD/VBW optimize for **completeness** — documenting every step. Flow optimizes
 Claude Code's native `.claude/rules/` system is good but has gaps that flow fills:
 
 - **Subagents don't inherit rules.** Flow's `SubagentStart` hook injects rules into every subagent.
-- **No semantic evaluation.** Native `paths:` matching is file-glob only. Flow combines pattern globs with keyword matching and Haiku-based semantic evaluation (one-line `relevance:` description per rule).
+- **No semantic evaluation.** Native `paths:` matching is file-glob only. Flow combines pattern globs with keyword matching and LLM-based semantic evaluation (Haiku for routine evals; Sonnet at `/flow:approve` and `/flow:implement` checkpoints) driven by a one-line `relevance:` description per rule.
 - **No re-evaluation.** Native rules load once. Flow re-evaluates on every tool boundary (debounced 30s); the `/flow:build` workflow additionally forces a synchronous re-eval at `/flow:approve` and `/flow:implement` checkpoints, where the agent must cross-check the plan against every loaded rule before proceeding.
 - **No enforcement.** Native rules are passive guidance. Flow actively scans file writes for violations.
 - **No learning.** Native rules are static. Flow's `flow:dev` agent accumulates knowledge across sessions.

@@ -12,9 +12,11 @@ Three selection paths, all running over rules in `.flow/rules/dynamic/*.md`:
 |---|---|---|
 | **Pattern** | Frontmatter `patterns` glob matches a file path | sync, ~ms |
 | **Keyword** | Frontmatter `keywords` substring-match recent text | sync, ~ms |
-| **LLM** | Frontmatter `relevance` describes when to apply; Haiku decides from a digest | async, ~3-7s |
+| **LLM** | Frontmatter `relevance` describes when to apply; the eval LLM decides from a digest | async, ~3-7s (Haiku) / ~6-12s (Sonnet) |
 
 Selection is the **union** of all three. A rule with multiple signal fields uses each one — pattern/keyword can pre-select before LLM runs. The LLM catalog excludes rules already selected by pattern/keyword (no point asking).
+
+**Model gating by `triggerReason`:** routine evals use Haiku for speed and cost; the synchronous `/flow:approve` and `/flow:implement` checkpoints upgrade to Sonnet (`triggerReason` = `pre-approve-checkpoint` or `pre-implement-checkpoint`) for higher-quality plan-vs-rules cross-checks. The mapping lives in `resolveEvalModel()` in `evaluator/src/haiku.ts` and is intentionally minimal — easy to extend if other gated reasons emerge.
 
 ## CLI
 
@@ -78,7 +80,7 @@ The injected ruleset is the **union** of the three `selected_via_*` arrays.
 
 ## Watermark
 
-Each session tracks a `watermark_uuid` — the last transcript entry analyzed by an LLM eval. New evals start from `watermark + 1`, so we never re-analyze the same conversation history. The watermark advances **script-side** after a successful Haiku call; on failure it stays put and the next eval retries from the same point.
+Each session tracks a `watermark_uuid` — the last transcript entry analyzed by an LLM eval. New evals start from `watermark + 1`, so we never re-analyze the same conversation history. The watermark advances **script-side** after a successful LLM call (Haiku or Sonnet); on failure it stays put and the next eval retries from the same point.
 
 ## Locking
 
