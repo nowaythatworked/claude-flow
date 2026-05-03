@@ -237,6 +237,92 @@ Status: **complete** (commits 229cbe2, a77b7fe, c100bee, fbc48d5)
 - [x] Periodic cache cleanup (subagent caches older than N days) — `flow-rules cleanup` sweeps orphan subagent caches, orphan injected ledgers, stale dead-PID locks, and truncates `eval-log.jsonl` / `pending-signals.jsonl` past configurable limits. Refuses to identify orphans when `SESSIONS.json` is missing. Default `--dry-run` flow via `/flow:cleanup` skill. Side effect: extracted `readSession` from hooks into a new `sessions.ts` module. (c100bee)
 - [x] Binary rebuild + closing-test pass: 156 pass / 0 fail / 312 expect() across 19 files. Real-claude integration tests skipped via FLOW_SKIP_REAL_CLAUDE=1. Binary ad-hoc codesigned. (fbc48d5)
 
+## Phase 10 — Rules system in vanilla sessions
+
+Status: **complete** (commits 74c3482, 522c53f, 1f1a6cc, b1d5c37, cd198cd, f939e80, 0558421, 89e5635)
+
+**Goal:** dynamic rule evaluation works in any Claude Code session, not only flow:build workflows. Always-on rules already work everywhere via `inject-session-rules.sh`; this phase extends the same coverage to dynamic rules. Workflow-specific behavior (phase reminders, audit checkpoints, write-protection) remains correctly flow-only.
+
+### The gap
+
+Three flow-rules hooks short-circuit when `readSession` returns null:
+
+- `evaluator/src/hooks/user-prompt-submit.ts` lines 27-31
+- `evaluator/src/hooks/pre-tool-use.ts` lines 40-44
+- `evaluator/src/hooks/subagent-start.ts` lines 26-30
+
+Result in a vanilla session (no SESSIONS.json entry): pattern/keyword matching never runs, async LLM eval never fires, dynamic rules never inject. This is a regression vs the legacy bash hook which fired whenever `.flow/rules/dynamic/` existed.
+
+### Architecture
+
+**Cache naming:**
+- Flow session: `<task_basename>__<focus_hash>.json` (unchanged)
+- **Vanilla session:** `session__<session_id>.json` (new — full UUID, per-session, no cross-session sharing)
+- Subagent: `sub__<parent_session_id>__<agent_id>.json` (unchanged)
+
+The full UUID in the vanilla key prevents two non-flow sessions in the same project from sharing one cache file (which would leak rule selections cross-session).
+
+**Hook fallback path:** when `readSession` returns null, hooks fall back to a no-flow code path:
+- Use `deriveSessionCacheKey(session_id) → "session__<session_id>"` (new helper alongside existing `deriveCacheKey`)
+- Eval pipeline runs as today: pattern + keyword sync, async LLM eval kickoff (debounced 30s), delta-inject from per-session ledger
+
+**Subagent parent lookup:** two-step probe.
+1. Try `readSession(parent_session_id)`. If found → flow parent → use `<task>__<focus_hash>` key.
+2. Else → vanilla parent → use `session__<parent>` key.
+3. If `readState` returns null at chosen key → return `{}` (subagent cold-starts; its own evals populate).
+
+Subagent's own cache filename (`sub__<parent>__<agent>.json`) is unchanged regardless of parent kind.
+
+**Branching:** no explicit inheritance needed. Conversation history (transcript) preserves all previously-injected `--- Dynamic Rule [...] ---` blocks. Branched session's cache starts empty; first hook fire treats current selections as initial-set and injects them. Worst case: harmless duplication of rule blocks in transcript. Reminder text already instructs the agent to scan all history.
+
+**What stays gated to flow workflows:**
+- `phase-gate.sh` (UserPromptSubmit) — phase reminder requires SESSIONS.json
+- `phase-guard.sh` (PreToolUse Write/Edit) — write-protection during planning/planned
+- `branch-detect.sh` (SessionStart) — flow session resumption logic
+- `flow-next-lock.sh` — flow workflow transition
+- `/flow:approve` and `/flow:implement` skill checkpoints — no plan to cross-check outside workflow
+
+**Cleanup model:** `flow-rules cleanup` gains a fifth category — vanilla session caches `session__<sid>.json` with mtime > 5 days are reaped (default; configurable via `--max-vanilla-cache-age-days <N>`). Injected-ledger orphan logic extended: a ledger for a vanilla session stays alive while its `session__` cache is fresh; both get cleaned in tandem when both are stale. Active-lock files prevent reaping their cache.
+
+### Tasks
+
+- [x] **`evaluator/src/paths.ts`** — add `deriveSessionCacheKey(sessionId): { key: "session__${sessionId}" }`. Existing `deriveCacheKey` unchanged. (74c3482)
+- [x] **`evaluator/src/eval.ts`** — added optional `cacheKey` to `FullEvalOpts` and `PatternOnlyOpts`; when provided, used directly. Empty `taskFile`/`focus` are accepted (no validation tightening needed). (74c3482)
+- [x] **`evaluator/src/hooks/user-prompt-submit.ts`** — when `readSession` returns null, fall back to no-flow path: empty taskFile + focus, key via `deriveSessionCacheKey`. Eval pipeline + delta-inject unchanged. Async kickoff threads `--cache-key`. (522c53f)
+- [x] **`evaluator/src/hooks/pre-tool-use.ts`** — same fallback shape. (522c53f)
+- [x] **`evaluator/src/hooks/subagent-start.ts`** — two-step parent probe (flow first, vanilla fallback). If parent has no cache state, cold-start subagent (return `{}`). (1f1a6cc)
+- [x] **`evaluator/src/cli.ts`** — `eval` subcommand: new `--cache-key` flag; when `--task-file` and `--focus` are both absent (and no explicit cache-key), auto-derive `session__<session-id>`. Async kickoff passes through. Help text updated. (522c53f, cd198cd)
+- [x] **`evaluator/src/cleanup.ts`** — new vanilla-cache sweep category; `CleanupOpts.maxVanillaCacheAgeDays` (default 5); `CleanupReport.vanillaCachesDeleted`. Injected-ledger sweep extended: ledger paired with fresh vanilla cache is kept; both reaped together when stale. Active-lock skip. (b1d5c37)
+- [x] **`evaluator/src/cli.ts`** — `cleanup` subcommand: `--max-vanilla-cache-age-days <N>` flag; output adds Vanilla session caches line. (b1d5c37)
+- [x] **`evaluator/src/status.ts`** — `state status` accepts session-keyed lookup. When `--task-file`/`--focus` absent, derive `session__<session-id>` key. (cd198cd)
+- [x] **`skills/rules-status/SKILL.md`** — handle vanilla session: when `$TASK` empty, pass only `--session-id`; binary auto-derives. (f939e80)
+- [x] **`skills/phase/SKILL.md`** — appends rules-status brief line in the no-workflow branch (works in vanilla via session__ cache). (f939e80)
+- [x] **Tests** (in `evaluator/tests/`):
+  - `user-prompt-submit-vanilla.test.ts`: no-SESSIONS UPS uses session__ key, runs eval, delta-injects
+  - `pre-tool-use-vanilla.test.ts`: no-SESSIONS PTU pattern match → state under session__ key, rule injected
+  - `subagent-start.test.ts` (new): flow parent / vanilla parent / no-parent / no-cache cases
+  - `cleanup.test.ts` extended: stale/fresh vanilla cache, active-lock skip, ledger pairing, dry-run, no-SESSIONS sweep
+  - `status.test.ts` extended: session__-keyed default & brief lookups
+  - `paths.test.ts` extended: `deriveSessionCacheKey` shape
+  Total tests: 156 → 175, 0 fail. (74c3482, 522c53f, 1f1a6cc, b1d5c37, cd198cd)
+- [x] **`docs/evaluator.md`** — new "Gating model" section + state files vanilla-session subsection + CLI signatures. (0558421)
+- [x] **`README.md`** — dynamic-rules section + hooks table mention vanilla-session support. (0558421)
+- [x] **`bin/flow-rules` rebuild** — `bun run build`; auto-codesigned. Smoke-tested with `mv .flow/SESSIONS.json` then `pineapple pizza` UPS payload → injection contained debug-hooks.md body. (89e5635)
+- [x] **Commit** per logical group; Phase 10 task file updated with commit hashes.
+
+### Validation
+
+- Hook fallback: simulate UserPromptSubmit JSON in a project without SESSIONS.json → confirm injection output is non-`{}` and contains expected dynamic rules.
+- Subagent vanilla-parent: simulate SubagentStart with a parent that has only `session__<parent>.json` → confirm subagent cache created, warm-started.
+- Cleanup time-based: create a `session__<sid>.json`, set its mtime to 6 days ago, run `cleanup --dry-run` → reports it as reapable.
+- Flow session regression: existing flow-mode tests stay green.
+
+### Risks / escalations
+
+- `runFullEval` or `runPatternOnly` may have implicit assumptions about non-empty taskFile/focus — surface if blocking and decide whether to thread a flag or relax.
+- Test fixtures for hooks may bake in "no SESSIONS.json → `{}`" — update expectations carefully; don't accidentally weaken flow-session test coverage.
+- If subagent's parent cache exists but is corrupt (non-parsable), prefer cold-start over crash. Confirm `readState` returns null in that case (cache.ts:11-25 already handles this).
+
 ## Out of scope (for now)
 
 - Pre-staging file content into agent context as part of rule injection (was Option A in evaluator design — deferred until B2+tools metrics justify it)
