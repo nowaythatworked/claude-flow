@@ -12,7 +12,7 @@ import { loadCatalog, buildLLMCatalog } from "./catalog.ts";
 import { extractSinceWatermark } from "./transcript.ts";
 import { matchPatterns, matchKeywords } from "./matcher.ts";
 import { buildDigest } from "./digest.ts";
-import { evaluate as haikuEvaluate } from "./haiku.ts";
+import { evaluate as haikuEvaluate, resolveEvalModel } from "./haiku.ts";
 import { appendLog } from "./log.ts";
 import {
   drainPendingSignals,
@@ -112,11 +112,12 @@ export async function runFullEval(opts: FullEvalOpts): Promise<EvalResult> {
         llmCatalog,
         signalPaths,
       );
+      const model = resolveEvalModel(opts.triggerReason);
       try {
-        haiku = await haikuEvaluate(digest);
+        haiku = await haikuEvaluate(digest, model);
       } catch (err) {
         process.stderr.write(
-          `[flow-rules] haiku eval failed: ${(err as Error).message}\n`,
+          `[flow-rules] ${model} eval failed: ${(err as Error).message}\n`,
         );
       }
     }

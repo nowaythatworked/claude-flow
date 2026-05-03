@@ -1,5 +1,20 @@
 import type { HaikuOutput } from "./types.ts";
 
+export type EvalModel = "haiku" | "sonnet";
+
+// Trigger reasons that warrant the higher-quality model. These are the
+// user-driven checkpoints from /flow:approve and /flow:implement skills,
+// where the agent must cross-check the plan against every loaded rule.
+// Routine async evals stay on haiku.
+const SONNET_REASONS: ReadonlySet<string> = new Set([
+  "pre-approve-checkpoint",
+  "pre-implement-checkpoint",
+]);
+
+export function resolveEvalModel(triggerReason: string): EvalModel {
+  return SONNET_REASONS.has(triggerReason) ? "sonnet" : "haiku";
+}
+
 const SCHEMA = {
   type: "object",
   properties: {
@@ -10,12 +25,12 @@ const SCHEMA = {
   required: ["task_type", "selected_rules", "reason"],
 } as const;
 
-export function buildClaudeArgs(): string[] {
+export function buildClaudeArgs(model: EvalModel = "haiku"): string[] {
   return [
     "claude",
     "-p",
     "--model",
-    "haiku",
+    model,
     "--output-format",
     "json",
     "--json-schema",
@@ -26,10 +41,13 @@ export function buildClaudeArgs(): string[] {
   ];
 }
 
-export async function evaluate(digest: string): Promise<HaikuOutput> {
+export async function evaluate(
+  digest: string,
+  model: EvalModel = "haiku",
+): Promise<HaikuOutput> {
   const env = { ...process.env, FLOW_NO_HOOKS: "1" };
   const proc = Bun.spawn({
-    cmd: buildClaudeArgs(),
+    cmd: buildClaudeArgs(model),
     env,
     stdin: "pipe",
     stdout: "pipe",
@@ -42,7 +60,7 @@ export async function evaluate(digest: string): Promise<HaikuOutput> {
   if (proc.exitCode !== 0) {
     const stderr = await new Response(proc.stderr).text();
     throw new Error(
-      `claude haiku exited ${proc.exitCode}: ${stderr.slice(0, 500)}`,
+      `claude ${model} exited ${proc.exitCode}: ${stderr.slice(0, 500)}`,
     );
   }
   let parsed: unknown;
@@ -50,21 +68,21 @@ export async function evaluate(digest: string): Promise<HaikuOutput> {
     parsed = JSON.parse(stdout);
   } catch (err) {
     throw new Error(
-      `claude haiku output is not JSON: ${(err as Error).message}; got: ${stdout.slice(0, 200)}`,
+      `claude ${model} output is not JSON: ${(err as Error).message}; got: ${stdout.slice(0, 200)}`,
     );
   }
   if (typeof parsed !== "object" || parsed === null) {
-    throw new Error(`claude haiku output is not an object`);
+    throw new Error(`claude ${model} output is not an object`);
   }
   const structured = Reflect.get(parsed, "structured_output");
   if (structured === undefined || structured === null) {
     throw new Error(
-      `claude haiku output missing structured_output field: ${JSON.stringify(parsed).slice(0, 200)}`,
+      `claude ${model} output missing structured_output field: ${JSON.stringify(parsed).slice(0, 200)}`,
     );
   }
   if (!isHaikuOutput(structured)) {
     throw new Error(
-      `claude haiku structured_output shape mismatch: ${JSON.stringify(structured).slice(0, 200)}`,
+      `claude ${model} structured_output shape mismatch: ${JSON.stringify(structured).slice(0, 200)}`,
     );
   }
   return structured;
