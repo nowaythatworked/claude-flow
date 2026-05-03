@@ -26,6 +26,12 @@ export interface FullEvalOpts {
   sessionId: string;
   transcriptPath: string | null;
   triggerReason: string;
+  /**
+   * Optional cache key override. When provided, the eval reads/writes state
+   * under this key instead of `deriveCacheKey(taskFile, focus)`. Used by
+   * vanilla (non-flow) sessions to key cache by `session__<id>`.
+   */
+  cacheKey?: string;
 }
 
 export interface PatternOnlyOpts {
@@ -36,6 +42,8 @@ export interface PatternOnlyOpts {
   triggerReason: string;
   filePaths: string[];
   text: string;
+  /** Optional cache key override (see FullEvalOpts.cacheKey). */
+  cacheKey?: string;
 }
 
 export type EvalResult =
@@ -45,7 +53,7 @@ export type EvalResult =
 
 export async function runFullEval(opts: FullEvalOpts): Promise<EvalResult> {
   const start = Date.now();
-  const { key } = deriveCacheKey(opts.taskFile, opts.focus);
+  const key = opts.cacheKey ?? deriveCacheKey(opts.taskFile, opts.focus).key;
 
   const lockInfo: LockInfo = {
     pid: process.pid,
@@ -163,7 +171,7 @@ export async function runFullEval(opts: FullEvalOpts): Promise<EvalResult> {
 
 export function runPatternOnly(opts: PatternOnlyOpts): EvalResult {
   const start = Date.now();
-  const { key } = deriveCacheKey(opts.taskFile, opts.focus);
+  const key = opts.cacheKey ?? deriveCacheKey(opts.taskFile, opts.focus).key;
   const lockInfo: LockInfo = {
     pid: process.pid,
     started_at: new Date().toISOString(),

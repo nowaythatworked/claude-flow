@@ -5,6 +5,7 @@ import {
   evalLogPath,
   focusHash,
   deriveCacheKey,
+  deriveSessionCacheKey,
   stateFilePath,
   lockDirPath,
 } from "../src/paths.ts";
@@ -54,5 +55,16 @@ describe("paths", () => {
     expect(lockDirPath("k", "/tmp/proj")).toBe(
       "/tmp/proj/.flow/rule-cache/k.json.lock",
     );
+  });
+
+  test("deriveSessionCacheKey produces session__<id>", () => {
+    const { key } = deriveSessionCacheKey("abc-123");
+    expect(key).toBe("session__abc-123");
+  });
+
+  test("deriveSessionCacheKey preserves full UUID", () => {
+    const sid = "11111111-2222-3333-4444-555555555555";
+    const { key } = deriveSessionCacheKey(sid);
+    expect(key).toBe(`session__${sid}`);
   });
 });

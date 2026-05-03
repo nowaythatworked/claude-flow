@@ -38,6 +38,16 @@ export function deriveCacheKey(
   return { key: `${base}__${fh}`, focusHash: fh };
 }
 
+/**
+ * Derive a cache key for vanilla (non-flow) Claude Code sessions where
+ * SESSIONS.json has no entry for the current session. Each vanilla session
+ * gets its own cache file keyed by full session id, preventing cross-session
+ * leak of rule selections within the same project.
+ */
+export function deriveSessionCacheKey(sessionId: string): { key: string } {
+  return { key: `session__${sessionId}` };
+}
+
 export function stateFilePath(cacheKey: string, cwd: string): string {
   return path.join(cacheDir(cwd), `${cacheKey}.json`);
 }
