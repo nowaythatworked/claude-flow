@@ -124,7 +124,7 @@ fi
 WARNING="Quality scan found ${VIOLATION_COUNT} violation(s) in \`${FILE_PATH}\`:
 
 ${VIOLATIONS}
-Please fix these issues. Use proper types instead of \`any\`, avoid unsafe type assertions, and add explanations to type-error suppressions."
+Please fix these issues. Use proper types instead of \`any\` (check codebase if a type can be reused), avoid unsafe type assertions, and add explanations to type-error suppressions."
 
 if command -v jq &>/dev/null; then
   jq -n --arg ctx "$WARNING" '{
