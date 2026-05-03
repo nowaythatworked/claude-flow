@@ -21,13 +21,13 @@ export interface FormatStatusOpts {
 
 export function formatStatus(opts: FormatStatusOpts): string {
   // When task-file/focus are absent (vanilla session), key on session id.
-  const isVanilla =
-    (opts.taskFile === "" || opts.taskFile === "unknown.md") &&
-    opts.focus.length === 0 &&
-    opts.sessionId !== null &&
-    opts.sessionId !== "";
-  const key = isVanilla
-    ? deriveSessionCacheKey(opts.sessionId).key
+  const taskMissing =
+    opts.taskFile === "" || opts.taskFile === "unknown.md";
+  const sid = opts.sessionId;
+  const useVanillaKey =
+    taskMissing && opts.focus.length === 0 && sid !== null && sid !== "";
+  const key = useVanillaKey
+    ? deriveSessionCacheKey(sid).key
     : deriveCacheKey(opts.taskFile, opts.focus).key;
   const state = readState(key, opts.cwd);
   if (!state) {
