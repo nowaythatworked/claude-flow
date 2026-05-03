@@ -7,21 +7,31 @@ Invoked as `/flow:rules-status`. Read-only debugging view of the rule evaluator'
 
 ## Instructions
 
-### 1. Get task and focus from session
+### 1. Get task and focus from session (if any)
 
 ```bash
 TASK=$("${CLAUDE_PLUGIN_ROOT}/scripts/session.sh" . "$CURRENT_SESSION_ID" --get-task)
 FOCUS=$("${CLAUDE_PLUGIN_ROOT}/scripts/session.sh" . "$CURRENT_SESSION_ID" --get-focus)
 ```
 
+If this is a vanilla (non-flow) session, `$TASK` will be empty. The binary
+auto-derives a `session__<session-id>` cache key when `--task-file` and
+`--focus` are omitted; pass only `--session-id` in that case.
+
 ### 2. Run status
 
 ```bash
-"${CLAUDE_PLUGIN_ROOT}/bin/flow-rules" state status \
-  --cwd . \
-  --task-file "$TASK" \
-  --focus "$FOCUS" \
-  --session-id "$CURRENT_SESSION_ID"
+if [ -z "$TASK" ]; then
+  "${CLAUDE_PLUGIN_ROOT}/bin/flow-rules" state status \
+    --cwd . \
+    --session-id "$CURRENT_SESSION_ID"
+else
+  "${CLAUDE_PLUGIN_ROOT}/bin/flow-rules" state status \
+    --cwd . \
+    --task-file "$TASK" \
+    --focus "$FOCUS" \
+    --session-id "$CURRENT_SESSION_ID"
+fi
 ```
 
 Present the output to the user verbatim. The report covers:

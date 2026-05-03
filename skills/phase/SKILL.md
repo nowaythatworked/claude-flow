@@ -43,4 +43,16 @@ Invoked as `/flow:phase`.
 
    c. If still not registered — list all task files from SESSIONS.json (`"${CLAUDE_PLUGIN_ROOT}/scripts/session.sh" . --dump`) and any `.md` files in `.flow/` (excluding rules, archive). Use `AskUserQuestion` to ask the user which task they are working on and which phase they are in. Register with their answer.
 
-4. If no SESSIONS.json exists and no task files found, say: "No active workflow. Use `/flow:build` to start."
+4. If no SESSIONS.json exists and no task files found, report:
+
+   ```
+   No active workflow. Use `/flow:build` to start.
+   ```
+
+   Then append the rules-status brief line if available (works in vanilla sessions via session__-keyed cache):
+
+   ```bash
+   "${CLAUDE_PLUGIN_ROOT}/bin/flow-rules" state status --cwd . --session-id "$CURRENT_SESSION_ID" --brief 2>/dev/null || true
+   ```
+
+   If the brief output is non-empty, append it; otherwise skip silently.
