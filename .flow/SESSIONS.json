@@ -27,19 +27,5 @@
       "Shared evaluation core (scripts/eval-rules-core.sh)"
     ],
     "parent": null
-  },
-  "3f26bba7-c459-41d2-9aae-2670c1288abf": {
-    "phase": "planned",
-    "task_file": "rebuild-dynamic-rule-evaluation.md",
-    "focus": [],
-    "parent": null
-  },
-  "de016244-10dc-414e-9b3c-7eff47d29d55": {
-    "phase": "implementing",
-    "task_file": "rebuild-dynamic-rule-evaluation.md",
-    "focus": [
-      "Phase 1 — Evaluator core"
-    ],
-    "parent": null
   }
 }
