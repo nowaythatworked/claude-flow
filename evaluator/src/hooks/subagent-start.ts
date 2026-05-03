@@ -1,6 +1,6 @@
 import * as fs from "node:fs";
 import { readState } from "../cache.ts";
-import { deriveCacheKey } from "../paths.ts";
+import { deriveCacheKey, deriveSessionCacheKey } from "../paths.ts";
 import { subagentCachePath, ensureCacheDir } from "../cache.ts";
 import { computeDeltaInjection } from "./delta-inject.ts";
 import { readSession } from "../sessions.ts";
@@ -23,17 +23,15 @@ export function runSubagentStart(stdin: string): number {
     process.stdout.write("{}");
     return 0;
   }
+  // Two-step parent probe: try flow first, then fall back to vanilla cache.
   const parentSession = readSession(payload.cwd, payload.parent_session_id);
-  if (!parentSession) {
-    process.stdout.write("{}");
-    return 0;
-  }
-  const { key } = deriveCacheKey(
-    parentSession.task_file,
-    parentSession.focus,
-  );
-  const parentState = readState(key, payload.cwd);
+  const parentKey = parentSession
+    ? deriveCacheKey(parentSession.task_file, parentSession.focus).key
+    : deriveSessionCacheKey(payload.parent_session_id).key;
+  const parentState = readState(parentKey, payload.cwd);
   if (!parentState) {
+    // No warm-start data — subagent cold-starts; its own evals will
+    // populate the cache.
     process.stdout.write("{}");
     return 0;
   }
