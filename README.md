@@ -186,6 +186,8 @@ Branch detection is automatic — the `SessionStart` hook detects branched sessi
 | `/flow:add-rule` | Add a new rule from a pattern you discovered |
 | `/flow:rules` | Show all active rules and their status |
 | `/flow:reload-rules` | Re-read all rules and re-evaluate dynamic rules (use when rules get lost) |
+| `/flow:rules-status` | Show current dynamic rule selection, watermark, recent eval activity, and lock state (debugging) |
+| `/flow:cleanup` | Sweep orphaned rule-cache files (subagent caches, injected ledgers, vanilla session caches) and truncate eval logs. Dry-run by default. |
 
 ## Internals
 
@@ -263,8 +265,8 @@ GSD/VBW optimize for **completeness** — documenting every step. Flow optimizes
 Claude Code's native `.claude/rules/` system is good but has gaps that flow fills:
 
 - **Subagents don't inherit rules.** Flow's `SubagentStart` hook injects rules into every subagent.
-- **No semantic evaluation.** Native `paths:` matching is file-glob only. Flow uses Sonnet to evaluate based on prompt and conversation context.
-- **No re-evaluation.** Native rules load once. Flow re-evaluates every 15 tool uses as your work evolves.
+- **No semantic evaluation.** Native `paths:` matching is file-glob only. Flow combines pattern globs with keyword matching and Haiku-based semantic evaluation (one-line `relevance:` description per rule).
+- **No re-evaluation.** Native rules load once. Flow re-evaluates on every tool boundary (debounced 30s); the `/flow:build` workflow additionally forces a synchronous re-eval at `/flow:approve` and `/flow:implement` checkpoints, where the agent must cross-check the plan against every loaded rule before proceeding.
 - **No enforcement.** Native rules are passive guidance. Flow actively scans file writes for violations.
 - **No learning.** Native rules are static. Flow's `flow:dev` agent accumulates knowledge across sessions.
 
