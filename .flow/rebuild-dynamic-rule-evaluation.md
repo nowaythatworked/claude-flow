@@ -216,9 +216,13 @@ User authorized the flagged README staleness cleanup immediately after the agent
 
 ## Phase 7 — Rule frontmatter migration
 
-- [ ] Audit each dynamic rule by hand: `claude-flow/.flow/rules/dynamic/debug-hooks.md` + the 15 rules in orbit (`cockpit-mobile`, `design-system`, `domain-glossary`, `event-bus-patterns`, `external-api`, `geocoding`, `infra-sst`, `mantine-conventions`, `meilisearch-indexing`, `product-brick-runtime-types`, `qax-query-accelerator`, `react-components`, `redux-local-db`, `shop-remix`, `storybook-patterns`, `trpc-routers`)
-- [ ] For each: set `eval_mode` (pattern | pattern+llm | llm | keyword), populate `applies_to` globs, populate `keywords` list, refine `description` for the catalog
-- [ ] Per-rule decisions documented inline in the rule file
+Status: **complete** (commit 53b53ba; orbit edits left uncommitted for user review)
+
+- [x] Audit each dynamic rule by hand: `claude-flow/.flow/rules/dynamic/debug-hooks.md` + 16 rules in orbit (`ariadne-findings`, `cockpit-mobile`, `design-system`, `domain-glossary`, `event-bus-patterns`, `external-api`, `geocoding`, `infra-sst`, `mantine-conventions`, `meilisearch-indexing`, `qax-query-accelerator`, `react-components`, `redux-local-db`, `shop-remix`, `storybook-patterns`, `trpc-routers`)
+- [x] For each: replace legacy single `description:` field with the new shape — `relevance` (string), optional `patterns` (string[]) globs, optional `keywords` (string[]) substrings. No `eval_mode` field — selection mode is presence-inferred.
+- [x] Per-rule decisions documented inline via the chosen signals
+- [x] Validated catalog parses cleanly via `flow-rules eval --sync` against both repos: zero `[flow-rules] skip rule …` warnings (relevance-only rules like `domain-glossary.md` are valid signals and not skipped)
+- [x] Pattern + keyword spot-checks via direct matcher invocation — confirmed `cockpit-mobile`, `infra-sst`, `event-bus-patterns`, `trpc-routers`, `qax-query-accelerator`, `storybook-patterns`, `redux-local-db` fire on representative file paths; `ariadne-findings`, `design-system`, `geocoding`, `debug-hooks` fire on representative text; non-matching paths and "hello world" produce no false positives
 
 ## Phase 8 — Production verification
 
