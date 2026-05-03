@@ -21,14 +21,20 @@ Selection is the **union** of all three. A rule with multiple signal fields uses
 ```
 flow-rules eval [--sync|--async] --reason <r> --cwd <p> --session-id <id>
                 [--transcript <path>] [--task-file <name>] [--focus <json>]
-                [--max-wait-ms <ms>] [--plugin-root <p>]
+                [--cache-key <key>] [--plugin-root <p>]
+                # When --task-file and --focus are omitted, the cache key
+                # is auto-derived to session__<session-id> (vanilla session).
 
 flow-rules hook user-prompt-submit       # reads Claude Code hook payload from stdin
 flow-rules hook pre-tool-use
 flow-rules hook subagent-start
 
-flow-rules state show [--cwd <p>] [--task-file <name>] [--focus <json>]
-flow-rules state path [--cwd <p>] [--task-file <name>] [--focus <json>]
+flow-rules state show   [--cwd <p>] [--task-file <name>] [--focus <json>] [--session-id <id>]
+flow-rules state path   [--cwd <p>] [--task-file <name>] [--focus <json>] [--session-id <id>]
+flow-rules state status [--cwd <p>] [--task-file <name>] [--focus <json>] [--session-id <id>] [--brief]
+
+flow-rules cleanup [--cwd <p>] [--dry-run] [--max-eval-log <N>]
+                   [--max-pending-signals <N>] [--max-vanilla-cache-age-days <N>]
 ```
 
 ## State files
@@ -39,7 +45,15 @@ Per `(task_file, focus)` pair, persisted at:
 .flow/rule-cache/<task_file>__<focus_hash>.json
 ```
 
-Subagents get their own cache file at `sub__<parent_session>__<agent_id>.json`, warm-started from parent's selection.
+For **vanilla (non-flow) sessions** — i.e. sessions with no entry in `.flow/SESSIONS.json` — the cache is keyed by full session id:
+
+```
+.flow/rule-cache/session__<session_id>.json
+```
+
+This per-session keying prevents two concurrent vanilla sessions in the same project from sharing one cache (which would leak rule selections cross-session).
+
+Subagents get their own cache file at `sub__<parent_session>__<agent_id>.json`, warm-started from parent's selection. The parent lookup is a two-step probe: try the flow-cache key first, fall back to `session__<parent>` if SESSIONS.json has no entry.
 
 State shape (JSON):
 
@@ -79,6 +93,24 @@ To prevent concurrent evals from clobbering each other, each cache file has a si
 When the binary spawns `claude -p` for the LLM eval, it sets `FLOW_NO_HOOKS=1` in the child env. Hook scripts (Phase 2) short-circuit on this var. Without it, the child claude triggers its own UserPromptSubmit hook, which spawns another claude, which… you get the idea — that's the bug we're fixing.
 
 The guard is also honored by the binary's own hook subcommands: `FLOW_NO_HOOKS=1 flow-rules hook user-prompt-submit` returns `{}` immediately.
+
+## Gating model — flow vs vanilla sessions
+
+Hooks split into two groups by what they need from `.flow/SESSIONS.json`:
+
+| Hook | Behavior in flow session | Behavior in vanilla session |
+|---|---|---|
+| `flow-rules hook user-prompt-submit` | Pattern/keyword sync, async LLM kickoff, delta-inject | Same, keyed by `session__<id>` |
+| `flow-rules hook pre-tool-use` | Same | Same, keyed by `session__<id>` |
+| `flow-rules hook subagent-start` | Warm-start from parent's flow cache | Warm-start from parent's `session__<id>` cache (if any), else cold-start |
+| `phase-gate.sh` (UserPromptSubmit) | Phase reminder | Skipped (no SESSIONS.json) |
+| `phase-guard.sh` (PreToolUse Write/Edit) | Write protection during planning/planned | Skipped |
+| `branch-detect.sh` (SessionStart) | Detects branched flow sessions | Skipped |
+| `inject-session-rules.sh` (SessionStart) | Always-on rule injection | Same |
+
+In short: **dynamic rule evaluation runs in any Claude Code session**. The workflow-specific hooks (phase reminders, write-protection, branch detection) cleanly no-op when there's no flow workflow active.
+
+Cleanup is mtime-driven for vanilla caches: `flow-rules cleanup` reaps `session__<id>.json` files older than `--max-vanilla-cache-age-days` (default 5), unless an active lock holds them. Paired injected ledgers are reaped in tandem.
 
 ## Debugging
 

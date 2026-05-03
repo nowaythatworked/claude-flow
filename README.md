@@ -59,6 +59,8 @@ Live in `.flow/rules/dynamic/`. Each rule declares any combination of three sign
 
 Selection runs on every UserPromptSubmit and on every PreToolUse(Edit|Write|Read|Glob|Grep): pattern and keyword matches are synchronous; the LLM pass (Haiku, watermark-bounded transcript digest) runs async in the background, debounced to 30s minimum spacing. Only matched rules are loaded — a project with 30 dynamic rules still keeps context lean because only the few matching the current task are injected. A per-session ledger ensures the same rule body is never re-injected; rules accumulate in conversation history and remain in effect.
 
+Dynamic rules work in **any** Claude Code session, not just `/flow:build` workflows. Sessions without a `SESSIONS.json` entry are keyed under `session__<session-id>` and treated as vanilla — pattern/keyword/LLM selection still fires, hooks still inject. Workflow-specific behavior (phase reminders, plan-vs-implement write protection) cleanly no-ops when there's no flow workflow active. See [`docs/evaluator.md`](./docs/evaluator.md) for the gating model.
+
 ### Rules Grow With Your Project
 
 When you discover a mistake pattern:
@@ -153,9 +155,9 @@ Branch detection is automatic — the `SessionStart` hook detects branched sessi
 | `SubagentStart` | Every agent spawn | Warm-starts subagent rule selection from parent's cache; delta-injects rules into subagent context |
 | `UserPromptSubmit` | Every prompt | Rule reminder: scan history for accumulated `Dynamic Rule [...]` blocks |
 | `UserPromptSubmit` | Every prompt | Phase-aware reminder, anchored to skill sections (only for registered sessions) |
-| `UserPromptSubmit` | Every prompt | Refreshes dynamic rule selection (`flow-rules` binary; Haiku over a watermark-bounded transcript digest); delta-injects new rule bodies via per-session ledger |
-| `PreToolUse` | Before Write/Edit | Phase guard: blocks code writes during planning and planned phases |
-| `PreToolUse` | Before Edit/Write/Read/Glob/Grep | Sync pattern + keyword match on tool input; appends to pending-signals; kicks off async LLM eval (30s debounce) |
+| `UserPromptSubmit` | Every prompt | Refreshes dynamic rule selection (`flow-rules` binary; Haiku over a watermark-bounded transcript digest); delta-injects new rule bodies via per-session ledger. Works in flow and vanilla sessions. |
+| `PreToolUse` | Before Write/Edit | Phase guard: blocks code writes during planning and planned phases (flow sessions only) |
+| `PreToolUse` | Before Edit/Write/Read/Glob/Grep | Sync pattern + keyword match on tool input; appends to pending-signals; kicks off async LLM eval (30s debounce). Works in flow and vanilla sessions. |
 | `PostToolUse` | After Write/Edit | Scans for `any` types, unsafe assertions, `@ts-ignore` |
 
 ### Custom Agents
