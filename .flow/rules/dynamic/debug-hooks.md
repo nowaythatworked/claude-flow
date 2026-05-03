@@ -1,5 +1,7 @@
 ---
-description: "Debug rule for verifying hook injection. Should ONLY load when the prompt mentions 'pineapple pizza' — a phrase that would never appear in real work."
+relevance: "the prompt mentions 'pineapple pizza' — a debug phrase used to verify the dynamic rule injection hook is working"
+keywords:
+  - "pineapple pizza"
 ---
 # Debug Hook Verification
 
