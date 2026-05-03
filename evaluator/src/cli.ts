@@ -1,7 +1,11 @@
 import * as path from "node:path";
 import { runFullEval, unionAllSelected } from "./eval.ts";
 import { readState } from "./cache.ts";
-import { deriveCacheKey, stateFilePath } from "./paths.ts";
+import {
+  deriveCacheKey,
+  deriveSessionCacheKey,
+  stateFilePath,
+} from "./paths.ts";
 import { runUserPromptSubmit } from "./hooks/user-prompt-submit.ts";
 import { runPreToolUse } from "./hooks/pre-tool-use.ts";
 import { runSubagentStart } from "./hooks/subagent-start.ts";
@@ -81,14 +85,28 @@ async function cmdEval(parsed: ParsedArgs): Promise<number> {
   const sessionId = parsed.flags.get("session-id");
   const reason = parsed.flags.get("reason") ?? "manual";
   const transcript = parsed.flags.get("transcript") ?? null;
-  const taskFile = parsed.flags.get("task-file") ?? "unknown.md";
-  const focus = parseFocus(parsed.flags.get("focus"));
+  const taskFileFlag = parsed.flags.get("task-file");
+  const focusFlag = parsed.flags.get("focus");
+  const cacheKeyFlag = parsed.flags.get("cache-key");
   const sync = parsed.bools.has("sync") || !parsed.bools.has("async");
 
   if (!sessionId) {
     process.stderr.write("flow-rules eval: --session-id is required\n");
     return 2;
   }
+
+  // Vanilla auto-derive: when no task-file/focus and no explicit cache-key,
+  // key the eval by session__<id>. Empty taskFile/focus then propagate
+  // through runFullEval (which uses cacheKey override directly).
+  const isVanilla =
+    cacheKeyFlag === undefined &&
+    (taskFileFlag === undefined || taskFileFlag === "") &&
+    (focusFlag === undefined || focusFlag === "[]" || focusFlag === "");
+
+  const taskFile = taskFileFlag ?? (isVanilla ? "" : "unknown.md");
+  const focus = parseFocus(focusFlag);
+  const cacheKey =
+    cacheKeyFlag ?? (isVanilla ? deriveSessionCacheKey(sessionId).key : undefined);
 
   if (!sync) {
     spawnDetachedAsyncEval({
@@ -98,6 +116,7 @@ async function cmdEval(parsed: ParsedArgs): Promise<number> {
       focus,
       transcript,
       reason,
+      cacheKey,
     });
     return 0;
   }
@@ -109,6 +128,7 @@ async function cmdEval(parsed: ParsedArgs): Promise<number> {
     sessionId,
     transcriptPath: transcript,
     triggerReason: reason,
+    ...(cacheKey !== undefined ? { cacheKey } : {}),
   });
 
   if (result.kind === "lock_held") {
@@ -133,6 +153,7 @@ function spawnDetachedAsyncEval(args: {
   focus: string[];
   transcript: string | null;
   reason: string;
+  cacheKey?: string;
 }): void {
   const cmdArgs = [
     "eval",
@@ -148,6 +169,9 @@ function spawnDetachedAsyncEval(args: {
     "--reason",
     args.reason,
   ];
+  if (args.cacheKey !== undefined) {
+    cmdArgs.push("--cache-key", args.cacheKey);
+  }
   if (args.transcript) {
     cmdArgs.push("--transcript", args.transcript);
   }

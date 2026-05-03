@@ -1,6 +1,6 @@
 import { runPatternOnly } from "../eval.ts";
 import { readState } from "../cache.ts";
-import { deriveCacheKey } from "../paths.ts";
+import { deriveCacheKey, deriveSessionCacheKey } from "../paths.ts";
 import { computeDeltaInjection } from "./delta-inject.ts";
 import { readSession } from "../sessions.ts";
 import {
@@ -38,28 +38,33 @@ export function runPreToolUse(stdin: string): number {
     return 0;
   }
   const session = readSession(payload.cwd, payload.session_id);
-  if (!session) {
-    process.stdout.write("{}");
-    return 0;
-  }
+  const isFlow = session !== null;
 
   const filePaths = extractToolPaths(payload.tool_name, payload.tool_input);
   recordSignals(payload, filePaths);
 
-  const { key } = deriveCacheKey(session.task_file, session.focus);
-  const prevState = readState(key, payload.cwd);
+  const cacheKey = isFlow
+    ? deriveCacheKey(session.task_file, session.focus).key
+    : deriveSessionCacheKey(payload.session_id).key;
+  const taskFile = isFlow ? session.task_file : "";
+  const focus = isFlow ? session.focus : [];
+
+  const prevState = readState(cacheKey, payload.cwd);
 
   runPatternOnly({
     cwd: payload.cwd,
-    taskFile: session.task_file,
-    focus: session.focus,
+    taskFile,
+    focus,
     sessionId: payload.session_id,
-    triggerReason: `pre-tool-use:${payload.tool_name}`,
+    triggerReason: isFlow
+      ? `pre-tool-use:${payload.tool_name}`
+      : `pre-tool-use:${payload.tool_name}:vanilla`,
     filePaths,
     text: "",
+    cacheKey,
   });
 
-  const fresh = readState(key, payload.cwd);
+  const fresh = readState(cacheKey, payload.cwd);
   const out = computeDeltaInjection(
     fresh,
     payload.session_id,
@@ -68,7 +73,7 @@ export function runPreToolUse(stdin: string): number {
   );
 
   if (shouldKickAsync(prevState)) {
-    spawnAsyncEval(payload, session.task_file, session.focus);
+    spawnAsyncEval(payload, taskFile, focus, cacheKey, isFlow);
   }
 
   process.stdout.write(JSON.stringify(out));
@@ -135,7 +140,10 @@ function spawnAsyncEval(
   payload: PreToolPayload,
   taskFile: string,
   focus: string[],
+  cacheKey: string,
+  isFlow: boolean,
 ): void {
+  const reasonSuffix = isFlow ? "" : ":vanilla";
   const args = [
     "eval",
     "--sync",
@@ -147,8 +155,10 @@ function spawnAsyncEval(
     taskFile,
     "--focus",
     JSON.stringify(focus),
+    "--cache-key",
+    cacheKey,
     "--reason",
-    `pre-tool-use-async:${payload.tool_name}`,
+    `pre-tool-use-async:${payload.tool_name}${reasonSuffix}`,
   ];
   if (payload.transcript_path !== "") {
     args.push("--transcript", payload.transcript_path);

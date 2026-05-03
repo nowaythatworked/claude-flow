@@ -1,8 +1,8 @@
 import { runPatternOnly } from "../eval.ts";
 import { readState } from "../cache.ts";
-import { deriveCacheKey } from "../paths.ts";
+import { deriveCacheKey, deriveSessionCacheKey } from "../paths.ts";
 import { computeDeltaInjection } from "./delta-inject.ts";
-import { readSession, type SessionRecord } from "../sessions.ts";
+import { readSession } from "../sessions.ts";
 import type { CacheState } from "../types.ts";
 
 interface HookPayload {
@@ -25,25 +25,30 @@ export async function runUserPromptSubmit(stdin: string): Promise<number> {
     return 0;
   }
   const session = readSession(payload.cwd, payload.session_id);
-  if (!session) {
-    process.stdout.write("{}");
-    return 0;
-  }
+  const isFlow = session !== null;
 
-  const { key } = deriveCacheKey(session.task_file, session.focus);
-  const prevState = readState(key, payload.cwd);
+  const cacheKey = isFlow
+    ? deriveCacheKey(session.task_file, session.focus).key
+    : deriveSessionCacheKey(payload.session_id).key;
+  const taskFile = isFlow ? session.task_file : "";
+  const focus = isFlow ? session.focus : [];
+
+  const prevState = readState(cacheKey, payload.cwd);
 
   runPatternOnly({
     cwd: payload.cwd,
-    taskFile: session.task_file,
-    focus: session.focus,
+    taskFile,
+    focus,
     sessionId: payload.session_id,
-    triggerReason: "user-prompt-submit-sync",
+    triggerReason: isFlow
+      ? "user-prompt-submit-sync"
+      : "user-prompt-submit-sync:vanilla",
     filePaths: [],
     text: payload.prompt,
+    cacheKey,
   });
 
-  const fresh = readState(key, payload.cwd);
+  const fresh = readState(cacheKey, payload.cwd);
   const out = computeDeltaInjection(
     fresh,
     payload.session_id,
@@ -52,7 +57,7 @@ export async function runUserPromptSubmit(stdin: string): Promise<number> {
   );
 
   if (shouldKickAsync(prevState)) {
-    spawnAsyncEval(payload, session);
+    spawnAsyncEval(payload, taskFile, focus, cacheKey, isFlow);
   }
 
   process.stdout.write(JSON.stringify(out));
@@ -68,7 +73,10 @@ function shouldKickAsync(prev: CacheState | null): boolean {
 
 function spawnAsyncEval(
   payload: HookPayload,
-  session: SessionRecord,
+  taskFile: string,
+  focus: string[],
+  cacheKey: string,
+  isFlow: boolean,
 ): void {
   const args = [
     "eval",
@@ -78,11 +86,13 @@ function spawnAsyncEval(
     "--session-id",
     payload.session_id,
     "--task-file",
-    session.task_file,
+    taskFile,
     "--focus",
-    JSON.stringify(session.focus),
+    JSON.stringify(focus),
+    "--cache-key",
+    cacheKey,
     "--reason",
-    "user-prompt-submit-async",
+    isFlow ? "user-prompt-submit-async" : "user-prompt-submit-async:vanilla",
     "--transcript",
     payload.transcript_path,
   ];
@@ -118,4 +128,3 @@ function parsePayload(stdin: string): HookPayload | null {
     cwd,
   };
 }
-
