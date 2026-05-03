@@ -99,7 +99,20 @@ function writePendingSignals(numLines: number): void {
 const DEFAULTS = {
   maxEvalLog: 1000,
   maxPendingSignals: 100,
+  maxVanillaCacheAgeDays: 5,
 };
+
+function writeVanillaCache(sessionId: string, ageDays: number): string {
+  fs.mkdirSync(cacheDir(tmp), { recursive: true });
+  const p = path.join(cacheDir(tmp), `session__${sessionId}.json`);
+  fs.writeFileSync(p, "{}");
+  if (ageDays > 0) {
+    const past = Date.now() - ageDays * 24 * 60 * 60 * 1000;
+    const seconds = past / 1000;
+    fs.utimesSync(p, seconds, seconds);
+  }
+  return p;
+}
 
 describe("runCleanup", () => {
   test("orphan subagent cache (parent not in SESSIONS.json) is deleted", () => {
@@ -165,8 +178,7 @@ describe("runCleanup", () => {
     const report = runCleanup({
       cwd: tmp,
       dryRun: false,
-      maxEvalLog: 1000,
-      maxPendingSignals: 100,
+      ...DEFAULTS,
     });
 
     expect(report.evalLogTruncated.from).toBe(1500);
@@ -192,8 +204,7 @@ describe("runCleanup", () => {
     const report = runCleanup({
       cwd: tmp,
       dryRun: false,
-      maxEvalLog: 1000,
-      maxPendingSignals: 100,
+      ...DEFAULTS,
     });
 
     expect(report.evalLogTruncated.from).toBe(50);
@@ -208,8 +219,7 @@ describe("runCleanup", () => {
     const report = runCleanup({
       cwd: tmp,
       dryRun: false,
-      maxEvalLog: 1000,
-      maxPendingSignals: 100,
+      ...DEFAULTS,
     });
 
     expect(report.pendingSignalsTruncated.from).toBe(500);
@@ -249,8 +259,7 @@ describe("runCleanup", () => {
     const report = runCleanup({
       cwd: tmp,
       dryRun: true,
-      maxEvalLog: 1000,
-      maxPendingSignals: 100,
+      ...DEFAULTS,
     });
 
     expect(report.subagentCachesDeleted).toContain(
@@ -296,5 +305,133 @@ describe("runCleanup", () => {
       "sub__only-one-segment.json",
     );
     expect(fs.existsSync(weird)).toBe(true);
+  });
+
+  test("stale vanilla cache (mtime > N days) is reaped", () => {
+    writeSessions({});
+    const stale = writeVanillaCache("dead-vanilla", 6);
+
+    const report = runCleanup({
+      cwd: tmp,
+      dryRun: false,
+      ...DEFAULTS,
+    });
+
+    expect(report.vanillaCachesDeleted).toContain(
+      "session__dead-vanilla.json",
+    );
+    expect(fs.existsSync(stale)).toBe(false);
+  });
+
+  test("fresh vanilla cache (recent mtime) is kept", () => {
+    writeSessions({});
+    const fresh = writeVanillaCache("live-vanilla", 0);
+
+    const report = runCleanup({
+      cwd: tmp,
+      dryRun: false,
+      ...DEFAULTS,
+    });
+
+    expect(report.vanillaCachesDeleted).toEqual([]);
+    expect(fs.existsSync(fresh)).toBe(true);
+  });
+
+  test("active lock on stale vanilla cache prevents reap", () => {
+    writeSessions({});
+    const sid = "locked-vanilla";
+    const stale = writeVanillaCache(sid, 6);
+    // Active lock with current PID + recent timestamp.
+    const lockDir = path.join(
+      cacheDir(tmp),
+      `session__${sid}.json.lock`,
+    );
+    fs.mkdirSync(lockDir, { recursive: true });
+    const info: LockInfo = {
+      pid: process.pid,
+      started_at: new Date().toISOString(),
+      trigger: "test",
+      session_id: sid,
+      covers_up_to_uuid: null,
+    };
+    fs.writeFileSync(path.join(lockDir, "info.json"), JSON.stringify(info));
+
+    const report = runCleanup({
+      cwd: tmp,
+      dryRun: false,
+      ...DEFAULTS,
+    });
+
+    expect(report.vanillaCachesDeleted).not.toContain(
+      `session__${sid}.json`,
+    );
+    expect(fs.existsSync(stale)).toBe(true);
+  });
+
+  test("vanilla ledger paired with fresh cache is kept", () => {
+    writeSessions({});
+    const sid = "live-vanilla-ledger";
+    writeVanillaCache(sid, 0);
+    const ledger = writeInjectedLedger(sid);
+
+    const report = runCleanup({
+      cwd: tmp,
+      dryRun: false,
+      ...DEFAULTS,
+    });
+
+    expect(report.injectedLedgersDeleted).not.toContain(`${sid}.json`);
+    expect(fs.existsSync(ledger)).toBe(true);
+  });
+
+  test("vanilla ledger paired with stale cache: both reaped together", () => {
+    writeSessions({});
+    const sid = "stale-vanilla-pair";
+    const cache = writeVanillaCache(sid, 6);
+    const ledger = writeInjectedLedger(sid);
+
+    const report = runCleanup({
+      cwd: tmp,
+      dryRun: false,
+      ...DEFAULTS,
+    });
+
+    expect(report.vanillaCachesDeleted).toContain(`session__${sid}.json`);
+    expect(report.injectedLedgersDeleted).toContain(`${sid}.json`);
+    expect(fs.existsSync(cache)).toBe(false);
+    expect(fs.existsSync(ledger)).toBe(false);
+  });
+
+  test("dry-run vanilla cache: report mentions it but file remains", () => {
+    writeSessions({});
+    const stale = writeVanillaCache("would-die", 7);
+
+    const report = runCleanup({
+      cwd: tmp,
+      dryRun: true,
+      ...DEFAULTS,
+    });
+
+    expect(report.vanillaCachesDeleted).toContain(
+      "session__would-die.json",
+    );
+    expect(fs.existsSync(stale)).toBe(true);
+  });
+
+  test("missing SESSIONS.json: vanilla caches still swept by mtime", () => {
+    // No writeSessions call; vanilla cleanup is mtime-driven and runs
+    // independent of SESSIONS.json (which only gates flow-orphan logic).
+    const stale = writeVanillaCache("orphan-vanilla", 6);
+
+    const report = runCleanup({
+      cwd: tmp,
+      dryRun: false,
+      ...DEFAULTS,
+    });
+
+    expect(report.vanillaCachesDeleted).toContain(
+      "session__orphan-vanilla.json",
+    );
+    expect(fs.existsSync(stale)).toBe(false);
   });
 });

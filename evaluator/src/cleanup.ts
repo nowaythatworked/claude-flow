@@ -13,12 +13,18 @@ export interface CleanupOpts {
   dryRun: boolean;
   maxEvalLog: number;
   maxPendingSignals: number;
+  /**
+   * Vanilla session caches (`session__<id>.json`) older than this many days
+   * are reaped (mtime-driven). Default 5.
+   */
+  maxVanillaCacheAgeDays: number;
 }
 
 export interface CleanupReport {
   subagentCachesDeleted: string[];
   injectedLedgersDeleted: string[];
   staleLocksReaped: string[];
+  vanillaCachesDeleted: string[];
   evalLogTruncated: { from: number; to: number };
   pendingSignalsTruncated: { from: number; to: number };
 }
@@ -28,23 +34,28 @@ export function runCleanup(opts: CleanupOpts): CleanupReport {
   // (we can't tell what's live without it).
   const haveSessions = fs.existsSync(sessionsFilePath(opts.cwd));
   const sessions = haveSessions ? readAllSessions(opts.cwd) : null;
+  const liveSessionIds =
+    sessions === null ? null : new Set(Object.keys(sessions));
+
+  // Sweep vanilla caches FIRST so the ledger sweep below can consult the
+  // resulting reaped set when judging vanilla-paired ledgers.
+  const vanillaSweep = sweepVanillaCaches(
+    opts.cwd,
+    opts.maxVanillaCacheAgeDays,
+    opts.dryRun,
+  );
 
   const subagentCachesDeleted =
-    sessions === null
+    liveSessionIds === null
       ? []
-      : sweepSubagentCaches(
-          opts.cwd,
-          new Set(Object.keys(sessions)),
-          opts.dryRun,
-        );
-  const injectedLedgersDeleted =
-    sessions === null
-      ? []
-      : sweepInjectedLedgers(
-          opts.cwd,
-          new Set(Object.keys(sessions)),
-          opts.dryRun,
-        );
+      : sweepSubagentCaches(opts.cwd, liveSessionIds, opts.dryRun);
+  const injectedLedgersDeleted = sweepInjectedLedgers(
+    opts.cwd,
+    liveSessionIds,
+    vanillaSweep.liveVanillaSessionIds,
+    vanillaSweep.deletedSessionIds,
+    opts.dryRun,
+  );
   const staleLocksReaped = sweepStaleLocks(opts.cwd, opts.dryRun);
   const evalLogTruncated = truncateJsonl(
     evalLogPath(opts.cwd),
@@ -61,9 +72,71 @@ export function runCleanup(opts: CleanupOpts): CleanupReport {
     subagentCachesDeleted,
     injectedLedgersDeleted,
     staleLocksReaped,
+    vanillaCachesDeleted: vanillaSweep.deletedFilenames,
     evalLogTruncated,
     pendingSignalsTruncated,
   };
+}
+
+interface VanillaSweepResult {
+  /** Filenames (basename) of caches that were reaped (or would be in dry-run). */
+  deletedFilenames: string[];
+  /** Set of session ids whose vanilla cache was reaped. */
+  deletedSessionIds: Set<string>;
+  /** Set of session ids whose vanilla cache exists and is still considered live. */
+  liveVanillaSessionIds: Set<string>;
+}
+
+function sweepVanillaCaches(
+  cwd: string,
+  maxAgeDays: number,
+  dryRun: boolean,
+): VanillaSweepResult {
+  const dir = cacheDir(cwd);
+  const result: VanillaSweepResult = {
+    deletedFilenames: [],
+    deletedSessionIds: new Set(),
+    liveVanillaSessionIds: new Set(),
+  };
+  if (!fs.existsSync(dir)) return result;
+  const maxAgeMs = maxAgeDays * 24 * 60 * 60 * 1000;
+  const now = Date.now();
+  for (const name of fs.readdirSync(dir)) {
+    if (!name.startsWith("session__") || !name.endsWith(".json")) continue;
+    const sessionId = name.slice(
+      "session__".length,
+      name.length - ".json".length,
+    );
+    if (sessionId === "") continue;
+    const full = path.join(dir, name);
+    let stat: fs.Stats;
+    try {
+      stat = fs.statSync(full);
+    } catch {
+      continue;
+    }
+    const age = now - stat.mtimeMs;
+    if (age <= maxAgeMs) {
+      result.liveVanillaSessionIds.add(sessionId);
+      continue;
+    }
+    // Stale by age — but skip if there's a fresh/active lock on it.
+    const lockDir = `${full}.lock`;
+    if (fs.existsSync(lockDir) && !isLockStale(lockDir)) {
+      result.liveVanillaSessionIds.add(sessionId);
+      continue;
+    }
+    result.deletedFilenames.push(name);
+    result.deletedSessionIds.add(sessionId);
+    if (!dryRun) {
+      try {
+        fs.unlinkSync(full);
+      } catch {
+        // best-effort
+      }
+    }
+  }
+  return result;
 }
 
 function sweepSubagentCaches(
@@ -101,7 +174,9 @@ function parseSubagentParentId(filename: string): string | null {
 
 function sweepInjectedLedgers(
   cwd: string,
-  liveSessionIds: Set<string>,
+  liveFlowSessionIds: Set<string> | null,
+  liveVanillaSessionIds: Set<string>,
+  deletedVanillaSessionIds: Set<string>,
   dryRun: boolean,
 ): string[] {
   const dir = injectedLedgerDir(cwd);
@@ -111,7 +186,38 @@ function sweepInjectedLedgers(
     if (!name.endsWith(".json")) continue;
     const sessionId = name.slice(0, -".json".length);
     if (sessionId === "") continue;
-    if (liveSessionIds.has(sessionId)) continue;
+
+    // A ledger is live if any of:
+    //   - SESSIONS.json (when present) lists the session as a live flow
+    //     session;
+    //   - the session has a corresponding fresh vanilla cache file.
+    //
+    // A ledger is reapable when:
+    //   - SESSIONS.json is present AND the session is not in it AND
+    //     (no paired vanilla cache OR paired vanilla cache was just reaped),
+    //   OR
+    //   - SESSIONS.json absent AND no live vanilla cache pair AND
+    //     vanilla cache reaped this run.
+    //
+    // We DO NOT touch ledgers whose state we can't classify (no SESSIONS,
+    // no vanilla cache info either way) — preserves prior safe behavior of
+    // refusing to delete without a SESSIONS.json reference.
+    if (liveVanillaSessionIds.has(sessionId)) continue;
+
+    let shouldDelete = false;
+    if (deletedVanillaSessionIds.has(sessionId)) {
+      // Paired vanilla cache was just swept — reap the ledger too.
+      shouldDelete = true;
+    } else if (
+      liveFlowSessionIds !== null &&
+      !liveFlowSessionIds.has(sessionId)
+    ) {
+      // SESSIONS.json present and session not listed; no paired vanilla
+      // cache exists either (otherwise it'd be in live or deleted above).
+      shouldDelete = true;
+    }
+
+    if (!shouldDelete) continue;
     deleted.push(name);
     if (!dryRun) {
       try {

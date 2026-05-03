@@ -252,11 +252,16 @@ async function cmdCleanup(parsed: ParsedArgs): Promise<number> {
     parsed.flags.get("max-pending-signals"),
     100,
   );
+  const maxVanillaCacheAgeDays = toNonNegInt(
+    parsed.flags.get("max-vanilla-cache-age-days"),
+    5,
+  );
   const report = runCleanup({
     cwd,
     dryRun,
     maxEvalLog,
     maxPendingSignals,
+    maxVanillaCacheAgeDays,
   });
   process.stdout.write(formatCleanupReport(cwd, report, dryRun));
   return 0;
@@ -287,6 +292,15 @@ function formatCleanupReport(
   } else {
     lines.push(
       `  Subagent caches: ${subN} ${verbDelete} (${report.subagentCachesDeleted.join(", ")})`,
+    );
+  }
+
+  const vanillaN = report.vanillaCachesDeleted.length;
+  if (vanillaN === 0) {
+    lines.push(`  Vanilla session caches: 0 ${verbDelete}`);
+  } else {
+    lines.push(
+      `  Vanilla session caches: ${vanillaN} ${verbDelete} (${report.vanillaCachesDeleted.join(", ")})`,
     );
   }
 
@@ -348,7 +362,7 @@ Usage:
   flow-rules state status [--cwd <p>] [--task-file <name>] [--focus <json>]
                           [--session-id <id>] [--brief]
   flow-rules cleanup [--cwd <p>] [--dry-run] [--max-eval-log <N>]
-                     [--max-pending-signals <N>]
+                     [--max-pending-signals <N>] [--max-vanilla-cache-age-days <N>]
 `);
 }
 
